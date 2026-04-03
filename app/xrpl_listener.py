@@ -3,7 +3,7 @@ import os
 
 from dotenv import load_dotenv
 
-from app.db import add_credits, create_escrow, find_user_by_api_key, get_balance_by_user_id
+from app.db import add_credits, find_user_by_api_key, get_balance_by_user_id
 
 load_dotenv()
 
@@ -24,7 +24,6 @@ XRPL_ENABLED = os.getenv("XRPL_ENABLED", "false").lower()
 XRPL_SERVER = os.getenv("XRPL_SERVER")
 XRPL_RECEIVER_ADDRESS = os.getenv("XRPL_RECEIVER_ADDRESS")
 XRPL_EXPECTED_MEMO_PREFIX = os.getenv("XRPL_EXPECTED_MEMO_PREFIX", "topup:")
-ESCROW_MEMO_PREFIX = "escrow:"
 CREDITS_PER_XRP = int(os.getenv("CREDITS_PER_XRP", "1"))
 
 
@@ -158,58 +157,6 @@ async def main():
                         },
                     )
 
-                # ── Handle EscrowCreate (non-custodial) ──
-                elif tx_type == "EscrowCreate" and memo.startswith(ESCROW_MEMO_PREFIX):
-                    api_key = memo[len(ESCROW_MEMO_PREFIX):].strip()
-                    user = find_user_by_api_key(api_key)
-
-                    if not user:
-                        print("No user matched API key in escrow memo:", api_key)
-                        continue
-
-                    sender = tx.get("Account")
-                    sequence = tx.get("Sequence")
-                    finish_after = tx.get("FinishAfter")
-                    cancel_after = tx.get("CancelAfter")
-                    condition = tx.get("Condition")
-
-                    escrow_id = create_escrow(
-                        user_id=user["id"],
-                        escrow_sequence=sequence,
-                        sender_address=sender,
-                        amount_drops=amount_drops,
-                        total_credits=credits,
-                        tx_hash=tx.get("hash"),
-                        condition=condition,
-                        finish_after=str(finish_after) if finish_after else None,
-                        cancel_after=str(cancel_after) if cancel_after else None,
-                    )
-
-                    # Provision credits from the escrow
-                    add_credits(
-                        user_id=user["id"],
-                        delta_credits=credits,
-                        reason="escrow_topup",
-                        meta={
-                            "escrowId": escrow_id,
-                            "txHash": tx.get("hash"),
-                            "amountDrops": amount_drops,
-                            "senderAddress": sender,
-                            "escrowSequence": sequence,
-                            "memo": memo,
-                        },
-                    )
-
-                    print(
-                        "Applied escrow top-up (non-custodial)",
-                        {
-                            "apiKey": api_key,
-                            "txHash": tx.get("hash"),
-                            "escrowSequence": sequence,
-                            "credits": credits,
-                            "balance": get_balance_by_user_id(user["id"]),
-                        },
-                    )
             except Exception as error:
                 print("Failed to process XRPL event:", error)
 

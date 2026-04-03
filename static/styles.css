@@ -154,9 +154,8 @@ button:hover {
 }
 
 button.secondary {
-  background: transparent;
-  border-color: var(--accent);
-  color: var(--text);
+  background: var(--accent-strong);
+  color: white;
 }
 
 .button-row {
@@ -213,8 +212,8 @@ pre {
 }
 
 table {
-  width: 100%;
-  min-width: 500px;
+  width: max-content;
+  min-width: 100%;
   border-collapse: collapse;
   font-size: 14px;
 }
@@ -225,6 +224,7 @@ td {
   padding: 10px;
   border-bottom: 1px solid var(--border);
   vertical-align: top;
+  white-space: nowrap;
 }
 
 th {

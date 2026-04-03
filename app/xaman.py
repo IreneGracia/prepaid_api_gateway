@@ -175,5 +175,6 @@ async def get_payload_status(payload_id: str) -> dict:
         "rejected": meta.get("cancelled", False) or meta.get("expired", False),
         "expired": meta.get("expired", False),
         "txHash": res.get("txid"),
+        "account": res.get("account"),
         "resolvedAt": meta.get("resolved_at"),
     }

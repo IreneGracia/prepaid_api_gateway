@@ -40,10 +40,12 @@ class XamanTopupRequest(BaseModel):
 
     Fields:
     - apiKey: the API key to credit after payment
-    - credits: number of credits to buy (1 credit = 1 XRP on testnet)
+    - credits: number of credits to buy
+    - endpointId: the endpoint ID (determines which developer receives the XRP)
     '''
     apiKey: str = Field(..., min_length=1)
     credits: int = Field(..., gt=0)
+    endpointId: str = Field("", min_length=0)
 
 
 class SummariseRequest(BaseModel):
@@ -65,6 +67,7 @@ class DeveloperRegisterRequest(BaseModel):
     '''Expected body for registering a new developer.'''
     name: str = Field(..., min_length=1)
     email: EmailStr
+    xrplAddress: str = ""
 
 
 class CreateEndpointRequest(BaseModel):

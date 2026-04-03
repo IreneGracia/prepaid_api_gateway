@@ -1,11 +1,9 @@
 /*
   Developer Dashboard UI logic.
-  Handles: registration, endpoint management, revenue, usage stats.
+  Handles: registration, endpoint management, revenue, usage stats, fees, security.
 */
 
 const els = {
-  devName: document.getElementById("devName"),
-  devEmail: document.getElementById("devEmail"),
   devKey: document.getElementById("devKey"),
   epName: document.getElementById("epName"),
   epDesc: document.getElementById("epDesc"),
@@ -14,18 +12,70 @@ const els = {
   endpointsList: document.getElementById("endpointsList"),
   revenueInfo: document.getElementById("revenueInfo"),
   usageList: document.getElementById("usageList"),
-  output: document.getElementById("output"),
 };
 
-const out = (data) => renderOutput(els.output, data);
+// ── Locked sections (greyed out until signed in) ──
+const lockedSections = document.querySelectorAll(".locked-section");
+let currentDevKey = "";
+
+function unlockSections() {
+  lockedSections.forEach(s => {
+    s.style.opacity = "1";
+    s.style.pointerEvents = "auto";
+  });
+}
+
+function lockSections() {
+  lockedSections.forEach(s => {
+    s.style.opacity = "0.35";
+    s.style.pointerEvents = "none";
+  });
+}
+
+function showSignedIn(name, email) {
+  document.getElementById("modeButtons").style.display = "none";
+  document.getElementById("loginForm").style.display = "none";
+  document.getElementById("registerForm").style.display = "none";
+  document.getElementById("updateXrplForm").style.display = "none";
+  document.getElementById("signedInStatus").style.display = "block";
+  document.getElementById("signedInMsg").textContent = `Signed in as ${name} (${email})`;
+  document.getElementById("accountModeLabel").textContent = "";
+}
+
+function showForm(formId) {
+  document.getElementById("loginForm").style.display = "none";
+  document.getElementById("registerForm").style.display = "none";
+  document.getElementById("updateXrplForm").style.display = "none";
+  document.getElementById("signedInStatus").style.display = "none";
+  document.getElementById(formId).style.display = "block";
+}
+
+// Start locked
+lockSections();
+
+// ── Mode buttons ──
+document.getElementById("showLoginBtn").addEventListener("click", () => {
+  showForm("loginForm");
+  document.getElementById("accountModeLabel").textContent = "Enter your email to sign in.";
+});
+
+document.getElementById("showRegisterBtn").addEventListener("click", () => {
+  showForm("registerForm");
+  document.getElementById("accountModeLabel").textContent = "Create a new developer account.";
+});
+
+document.getElementById("showUpdateXrplBtn").addEventListener("click", () => {
+  showForm("updateXrplForm");
+  document.getElementById("accountModeLabel").textContent = "Sign in first, then update your XRPL address.";
+});
 
 // ── Copy customer registration link ──
 function copyLink(endpointId) {
   const url = `${window.location.origin}/portal/customer?endpoint=${endpointId}`;
   navigator.clipboard.writeText(url).then(() => {
-    out({ message: "Link copied to clipboard", url });
+    alert("Link copied to clipboard!");
   }).catch(() => {
-    out({ message: "Copy this link", url });
+    prompt("Copy this link:", url);
   });
 }
 
@@ -43,25 +93,28 @@ setTimeout(updateDevCostPreview, 500);
 
 // ── Sign in ──
 document.getElementById("devLoginBtn").addEventListener("click", async () => {
-  const data = await postJSON("/api/developer/login", {
-    email: els.devEmail.value
-  });
-  out(data);
+  const email = document.getElementById("devEmail").value;
+  const data = await postJSON("/api/developer/login", { email });
   if (data?.developer?.developerKey) {
-    els.devKey.value = data.developer.developerKey;
-    els.devName.value = data.developer.name;
+    currentDevKey = data.developer.developerKey;
+    els.devKey.value = currentDevKey;
+    showSignedIn(data.developer.name, data.developer.email);
+    unlockSections();
   }
 });
 
 // ── Register ──
 document.getElementById("devRegisterBtn").addEventListener("click", async () => {
   const data = await postJSON("/api/developer/register", {
-    name: els.devName.value,
-    email: els.devEmail.value
+    name: document.getElementById("regUsername").value,
+    email: document.getElementById("devEmailReg").value,
+    xrplAddress: document.getElementById("devXrplAddress").value,
   });
-  out(data);
   if (data?.developer?.developerKey) {
-    els.devKey.value = data.developer.developerKey;
+    currentDevKey = data.developer.developerKey;
+    els.devKey.value = currentDevKey;
+    showSignedIn(data.developer.name, data.developer.email);
+    unlockSections();
   }
 });
 
@@ -69,24 +122,22 @@ document.getElementById("devRegisterBtn").addEventListener("click", async () => 
 document.getElementById("addEndpointBtn").addEventListener("click", async () => {
   const xrp = Number(els.epXrpCost.value) || 0;
   const credits = xrpToCredits(xrp);
-  if (credits < 1) {
-    return out({ error: "Cost must be at least 1 credit" });
-  }
-  const data = await postJSON("/api/developer/endpoint", {
+  if (credits < 1) return;
+  await postJSON("/api/developer/endpoint", {
     developerKey: els.devKey.value,
     name: els.epName.value,
     description: els.epDesc.value,
     url: els.epUrl.value,
     costPerCall: credits,
   });
-  out(data);
+  // Auto-reload endpoints after adding
+  document.getElementById("loadEndpointsBtn").click();
 });
 
 // ── Load endpoints ──
 document.getElementById("loadEndpointsBtn").addEventListener("click", async () => {
   const key = els.devKey.value.trim();
   const data = await getJSON(`/api/developer/${encodeURIComponent(key)}/endpoints`);
-  out(data);
 
   if (!data.endpoints || data.endpoints.length === 0) {
     els.endpointsList.innerHTML = "<p class='muted'>No endpoints yet.</p>";
@@ -116,7 +167,10 @@ document.getElementById("loadEndpointsBtn").addEventListener("click", async () =
 document.getElementById("revenueBtn").addEventListener("click", async () => {
   const key = els.devKey.value.trim();
   const data = await getJSON(`/api/developer/${encodeURIComponent(key)}/revenue`);
-  out(data);
+
+  // Clear other sections
+  els.usageList.innerHTML = "";
+  document.getElementById("feesInfo").innerHTML = "";
 
   if (data.totalRevenue !== undefined) {
     let html = `<p><strong>Total revenue: ${formatCost(data.totalRevenue)}</strong></p>`;
@@ -134,7 +188,10 @@ document.getElementById("revenueBtn").addEventListener("click", async () => {
 document.getElementById("usageBtn").addEventListener("click", async () => {
   const key = els.devKey.value.trim();
   const data = await getJSON(`/api/developer/${encodeURIComponent(key)}/usage`);
-  out(data);
+
+  // Clear other sections
+  els.revenueInfo.innerHTML = "";
+  document.getElementById("feesInfo").innerHTML = "";
 
   if (!data.calls || data.calls.length === 0) {
     els.usageList.innerHTML = "<p class='muted'>No calls yet.</p>";
@@ -149,6 +206,43 @@ document.getElementById("usageBtn").addEventListener("click", async () => {
     <table><thead><tr><th>Time</th><th>Endpoint</th><th>Customer</th><th>Cost</th></tr></thead><tbody>${rows}</tbody></table>`;
 });
 
+// ── Save XRPL address (sign in by email first, then update) ──
+document.getElementById("saveXrplBtn").addEventListener("click", async () => {
+  const email = document.getElementById("updateEmail").value;
+  const newAddress = document.getElementById("newXrplAddress").value.trim();
+
+  // Sign in first to get the key
+  const loginData = await postJSON("/api/developer/login", { email });
+  if (!loginData?.developer?.developerKey) return;
+
+  const key = loginData.developer.developerKey;
+  currentDevKey = key;
+  els.devKey.value = key;
+
+  // Update the address
+  await putJSON(`/api/developer/${encodeURIComponent(key)}/xrpl-address`, {
+    xrplAddress: newAddress,
+  });
+
+  showSignedIn(loginData.developer.name, loginData.developer.email);
+  unlockSections();
+});
+
+// ── Fees ──
+document.getElementById("feesBtn").addEventListener("click", async () => {
+  const key = els.devKey.value.trim();
+  const data = await getJSON(`/api/developer/${encodeURIComponent(key)}/fees`);
+
+  // Clear other sections
+  els.revenueInfo.innerHTML = "";
+  els.usageList.innerHTML = "";
+
+  const feesInfo = document.getElementById("feesInfo");
+  if (data.owedCredits !== undefined) {
+    feesInfo.innerHTML = `<p><strong>Platform fees owed: ${formatCost(data.owedCredits)}</strong></p>
+      <p class="muted">This is 5% of credits purchased by your customers. Pay to keep your endpoints active.</p>`;
+  }
+});
 
 // ── Security settings ──
 const secEls = {
@@ -169,7 +263,6 @@ const secEls = {
 document.getElementById("loadSecurityBtn").addEventListener("click", async () => {
   const key = els.devKey.value.trim();
   const data = await getJSON(`/api/developer/${encodeURIComponent(key)}/security`);
-  out(data);
 
   if (data.rateLimitPerKey !== undefined) {
     document.getElementById("securityForm").style.display = "block";
@@ -205,6 +298,6 @@ document.getElementById("saveSecurityBtn").addEventListener("click", async () =>
     maxBodySize: Number(secEls.maxBodySize.value),
   };
 
-  const data = await putJSON(`/api/developer/${encodeURIComponent(key)}/security`, settings);
-  out(data);
+  await putJSON(`/api/developer/${encodeURIComponent(key)}/security`, settings);
+  document.getElementById("securityForm").style.display = "none";
 });

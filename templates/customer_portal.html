@@ -47,11 +47,11 @@
       <h3>2. Top up credits</h3>
       <p class="muted">Pay with XRP on testnet via Xaman wallet.</p>
       <label for="apiKey">API key</label>
-      <input id="apiKey" placeholder="Generated after registration" />
+      <input id="apiKey" type="password" placeholder="Generated after registration" readonly />
       <label for="credits">Credits to buy</label>
       <input id="credits" type="number" value="100" min="1" />
       <p class="muted" id="xrpCostPreview" style="margin-top:6px; font-size:13px;"></p>
-      <button id="escrowBtn">Pay with XRP (non-custodial)</button>
+      <button id="payXrpBtn">Pay with XRP</button>
       <button id="topupBtn" class="secondary">Mock top-up (demo)</button>
       <div id="qrWrap" style="display:none; text-align:center; margin-top:1rem;">
         <p class="muted">Scan with Xaman app:</p>
@@ -67,11 +67,7 @@
       <div class="button-row">
         <button id="balanceBtn">Refresh balance</button>
         <button id="ledgerBtn" class="secondary">Load ledger</button>
-        <button id="escrowInfoBtn" class="secondary">Escrow status</button>
         <button id="verifyBtn" class="secondary">Verify integrity</button>
-      </div>
-      <div id="escrowInfo" style="display:none; margin-top:1rem;">
-        <p class="muted" id="escrowSummary"></p>
       </div>
       <div id="verifyResult" style="display:none; margin-top:12px; padding:12px; border-radius:10px;"></div>
     </section>

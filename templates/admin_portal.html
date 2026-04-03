@@ -50,22 +50,23 @@
     <div id="customersList" class="table-wrap" style="margin-top:1rem;"></div>
   </section>
 
-  <!-- Escrows -->
+  <!-- XRPL Payments -->
   <section class="card">
-    <h3>Escrows</h3>
-    <p class="muted">All XRPL escrows across all customers.</p>
-    <button id="loadEscrowsBtn">Load escrows</button>
-    <div id="escrowsList" class="table-wrap" style="margin-top:1rem;"></div>
+    <h3>XRPL Payments</h3>
+    <p class="muted">All XRP payments from customers to developers.</p>
+    <button id="loadPaymentsBtn">Load payments</button>
+    <div id="paymentsList" class="table-wrap" style="margin-top:1rem;"></div>
+  </section>
+
+  <!-- Platform Fees -->
+  <section class="card">
+    <h3>Platform Fees</h3>
+    <p class="muted">Fees owed by developers (5% of customer payments).</p>
+    <button id="loadFeesBtn">Load fees</button>
+    <div id="feesList" class="table-wrap" style="margin-top:1rem;"></div>
   </section>
 
 </main>
-
-<section class="output-layout" style="grid-template-columns: 1fr;">
-  <div class="output-card">
-    <h3>Latest response</h3>
-    <pre id="output">Ready.</pre>
-  </div>
-</section>
 {% endblock %}
 
 {% block scripts %}

@@ -28,8 +28,6 @@ const els = {
   qrWrap: document.getElementById("qrWrap"),
   qrImage: document.getElementById("qrImage"),
   qrStatus: document.getElementById("qrStatus"),
-  escrowInfo: document.getElementById("escrowInfo"),
-  escrowSummary: document.getElementById("escrowSummary"),
 };
 
 const out = (data) => { if (els.output) renderOutput(els.output, data); };
@@ -115,18 +113,19 @@ document.getElementById("topupBtn")?.addEventListener("click", async () => {
   out(data);
 });
 
-// ── Escrow top-up ──
-document.getElementById("escrowBtn")?.addEventListener("click", async () => {
+// ── Pay with XRP ──
+document.getElementById("payXrpBtn")?.addEventListener("click", async () => {
   els.qrWrap.style.display = "none";
-  const data = await postJSON("/api/topup/escrow", {
+  const data = await postJSON("/api/topup/xrp", {
     apiKey: els.apiKey.value,
-    credits: Number(els.credits.value)
+    credits: Number(els.credits.value),
+    endpointId: endpointId || "",
   });
   out(data);
   if (!data.qrUrl) return;
   els.qrImage.src = data.qrUrl;
   els.qrWrap.style.display = "block";
-  els.qrStatus.textContent = "Scan to lock XRP in escrow...";
+  els.qrStatus.textContent = "Scan to pay — XRP goes directly to the developer...";
   els.qrStatus.style.color = "";
   pollXamanStatus(data.payloadId, els.qrStatus, els.output, loadBalance);
 });
@@ -165,19 +164,6 @@ document.getElementById("ledgerBtn")?.addEventListener("click", async () => {
       <thead><tr><th>Created</th><th>Reason</th><th>Delta</th><th>Meta</th></tr></thead>
       <tbody>${rows || `<tr><td colspan="4">No entries.</td></tr>`}</tbody>
     </table>`;
-});
-
-// ── Escrow info ──
-document.getElementById("escrowInfoBtn")?.addEventListener("click", async () => {
-  const data = await getJSON(`/api/escrow/${encodeURIComponent(els.apiKey.value)}`);
-  out(data);
-  if (data.totalLocked !== undefined) {
-    els.escrowInfo.style.display = "block";
-    els.escrowSummary.innerHTML =
-      `Locked: <strong>${data.totalLocked}</strong> | ` +
-      `Claimed: <strong>${data.totalClaimed}</strong> | ` +
-      `Remaining: <strong>${data.remainingEscrowed}</strong>`;
-  }
 });
 
 // ── Verify ledger integrity ──

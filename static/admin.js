@@ -1,23 +1,21 @@
 /*
   Admin Dashboard UI logic.
-  Handles: stats, developers, endpoints, customers, escrows.
+  Handles: stats, developers, endpoints, customers, XRPL payments.
 */
 
 const els = {
-  output: document.getElementById("output"),
   devsList: document.getElementById("devsList"),
   endpointsList: document.getElementById("endpointsList"),
   customersList: document.getElementById("customersList"),
-  escrowsList: document.getElementById("escrowsList"),
-  callsList: document.getElementById("callsList"),
+  paymentsList: document.getElementById("paymentsList"),
+  feesList: document.getElementById("feesList"),
 };
 
-const out = (data) => renderOutput(els.output, data);
 
 // ── Stats ──
 async function loadStats() {
   const data = await getJSON("/api/admin/stats");
-  out(data);
+
   document.getElementById("statCustomers").textContent = data.totalCustomers ?? "-";
   document.getElementById("statDevs").textContent = data.totalDevelopers ?? "-";
   document.getElementById("statEndpoints").textContent = data.totalEndpoints ?? "-";
@@ -32,7 +30,6 @@ loadStats();
 // ── Developers ──
 document.getElementById("loadDevsBtn").addEventListener("click", async () => {
   const data = await getJSON("/api/admin/developers");
-  out(data);
 
   if (!data.developers || data.developers.length === 0) {
     els.devsList.innerHTML = "<p class='muted'>No developers yet.</p>";
@@ -43,8 +40,8 @@ document.getElementById("loadDevsBtn").addEventListener("click", async () => {
     <tr>
       <td>${d.name}</td>
       <td>${d.email}</td>
-      <td><code style="font-size:11px;">${d.developer_key.slice(0,12)}...</code></td>
-      <td>${d.created_at.slice(0,10)}</td>
+      <td>XXXXXX...${d.developer_key.slice(-6)}</td>
+      <td>${d.created_at.slice(0,19).replace('T',' ')}</td>
     </tr>
   `).join("");
 
@@ -58,7 +55,6 @@ document.getElementById("loadDevsBtn").addEventListener("click", async () => {
 // ── Endpoints ──
 document.getElementById("loadEndpointsBtn").addEventListener("click", async () => {
   const data = await getJSON("/api/admin/endpoints");
-  out(data);
 
   if (!data.endpoints || data.endpoints.length === 0) {
     els.endpointsList.innerHTML = "<p class='muted'>No endpoints yet.</p>";
@@ -67,9 +63,9 @@ document.getElementById("loadEndpointsBtn").addEventListener("click", async () =
 
   const rows = data.endpoints.map(ep => `
     <tr>
-      <td><strong>${ep.name}</strong></td>
+      <td>${ep.name}</td>
       <td>${ep.developer_name || ""}</td>
-      <td style="font-size:12px;">${ep.url}</td>
+      <td>${ep.url}</td>
       <td>${formatCost(ep.cost_per_call)}</td>
       <td>${ep.is_active ? "Active" : "Inactive"}</td>
     </tr>
@@ -85,7 +81,6 @@ document.getElementById("loadEndpointsBtn").addEventListener("click", async () =
 // ── Customers ──
 document.getElementById("loadCustomersBtn").addEventListener("click", async () => {
   const data = await getJSON("/api/admin/customers");
-  out(data);
 
   if (!data.customers || data.customers.length === 0) {
     els.customersList.innerHTML = "<p class='muted'>No customers yet.</p>";
@@ -97,8 +92,8 @@ document.getElementById("loadCustomersBtn").addEventListener("click", async () =
       <td>${u.name}</td>
       <td>${u.email}</td>
       <td>${formatCost(u.balance)}</td>
-      <td><code style="font-size:11px;">${u.api_key.slice(0,12)}...</code></td>
-      <td>${u.created_at.slice(0,10)}</td>
+      <td>XXXXXX...${u.api_key.slice(-6)}</td>
+      <td>${u.created_at.slice(0,19).replace('T',' ')}</td>
     </tr>
   `).join("");
 
@@ -109,30 +104,54 @@ document.getElementById("loadCustomersBtn").addEventListener("click", async () =
     </table>`;
 });
 
-// ── Escrows ──
-document.getElementById("loadEscrowsBtn").addEventListener("click", async () => {
-  const data = await getJSON("/api/admin/escrows");
-  out(data);
+// ── XRPL Payments ──
+document.getElementById("loadPaymentsBtn").addEventListener("click", async () => {
+  const data = await getJSON("/api/admin/payments");
 
-  if (!data.escrows || data.escrows.length === 0) {
-    els.escrowsList.innerHTML = "<p class='muted'>No escrows yet.</p>";
+  if (!data.payments || data.payments.length === 0) {
+    els.paymentsList.innerHTML = "<p class='muted'>No payments yet.</p>";
     return;
   }
 
-  const rows = data.escrows.map(e => `
+  const rows = data.payments.map(p => `
     <tr>
-      <td>${e.user_name}</td>
-      <td>${e.total_credits}</td>
-      <td>${e.claimed_credits}</td>
-      <td>${e.total_credits - e.claimed_credits}</td>
-      <td>${e.status}</td>
-      <td>${e.created_at.slice(0,10)}</td>
+      <td>${p.user_name}</td>
+      <td>${formatCost(p.delta_credits)}</td>
+      <td>${p.reason}</td>
+      <td>${p.meta?.txHash || '-'}</td>
+      <td>${p.created_at.slice(0,19).replace('T',' ')}</td>
     </tr>
   `).join("");
 
-  els.escrowsList.innerHTML = `
+  els.paymentsList.innerHTML = `
     <table>
-      <thead><tr><th>Customer</th><th>Total</th><th>Claimed</th><th>Remaining</th><th>Status</th><th>Created</th></tr></thead>
+      <thead><tr><th>Customer</th><th>Credits</th><th>Type</th><th>TX Hash</th><th>Date</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+});
+
+// ── Platform Fees ──
+document.getElementById("loadFeesBtn").addEventListener("click", async () => {
+  const data = await getJSON("/api/admin/fees");
+
+  if (!data.fees || data.fees.length === 0) {
+    els.feesList.innerHTML = "<p class='muted'>No fees recorded yet.</p>";
+    return;
+  }
+
+  const rows = data.fees.map(f => `
+    <tr>
+      <td>${f.developer_name}</td>
+      <td>${f.amount_credits} credits</td>
+      <td>${f.amount_xrp} XRP</td>
+      <td>${f.status}</td>
+      <td>${f.created_at.slice(0,19).replace('T',' ')}</td>
+    </tr>
+  `).join("");
+
+  els.feesList.innerHTML = `
+    <table>
+      <thead><tr><th>Developer</th><th>Credits</th><th>XRP</th><th>Status</th><th>Date</th></tr></thead>
       <tbody>${rows}</tbody>
     </table>`;
 });

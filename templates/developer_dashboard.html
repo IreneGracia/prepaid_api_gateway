@@ -12,26 +12,60 @@
 </header>
 
 <main class="grid">
-  <!-- 1. Register -->
+  <!-- 1. Account -->
   <section class="card">
-    <h3>1. Sign in or register</h3>
-    <p class="muted">Enter your email to sign in, or register a new account.</p>
-    <label for="devName">Name</label>
-    <input id="devName" value="" placeholder="Your name" />
-    <label for="devEmail">Email</label>
-    <input id="devEmail" value="" placeholder="you@example.com" />
-    <div class="button-row">
+    <h3>1. Account</h3>
+    <p class="muted" id="accountModeLabel">Choose an option below.</p>
+
+    <div class="button-row" id="modeButtons">
+      <button id="showLoginBtn">Sign in</button>
+      <button id="showRegisterBtn" class="secondary">Register new account</button>
+      <button id="showUpdateXrplBtn" class="secondary">Update XRPL address</button>
+    </div>
+
+    <!-- Sign in form -->
+    <div id="loginForm" style="display:none;">
+      <label for="loginUsername">Username</label>
+      <input id="loginUsername" value="" placeholder="Your username" />
+      <label for="devEmail">Email</label>
+      <input id="devEmail" value="" placeholder="you@example.com" />
       <button id="devLoginBtn">Sign in</button>
-      <button id="devRegisterBtn" class="secondary">Register new account</button>
+    </div>
+
+    <!-- Register form -->
+    <div id="registerForm" style="display:none;">
+      <label for="regUsername">Username</label>
+      <input id="regUsername" value="" placeholder="Choose a username" />
+      <label for="devEmailReg">Email</label>
+      <input id="devEmailReg" value="" placeholder="you@example.com" />
+      <label for="devXrplAddress">XRPL Address (from your Xaman wallet)</label>
+      <input id="devXrplAddress" value="" placeholder="rYourXamanAddress..." />
+      <button id="devRegisterBtn">Register</button>
+    </div>
+
+    <!-- Update XRPL address form -->
+    <div id="updateXrplForm" style="display:none;">
+      <label for="updateUsername">Username</label>
+      <input id="updateUsername" value="" placeholder="Your username" />
+      <label for="updateEmail">Email</label>
+      <input id="updateEmail" value="" placeholder="you@example.com" />
+      <label for="newXrplAddress">New Xaman address</label>
+      <input id="newXrplAddress" value="" placeholder="rNewXamanAddress..." />
+      <button id="saveXrplBtn">Update XRPL address</button>
+    </div>
+
+    <!-- Status after sign in -->
+    <div id="signedInStatus" style="display:none; margin-top:1rem;">
+      <p style="color: var(--success);" id="signedInMsg"></p>
     </div>
   </section>
 
   <!-- 2. Add endpoint -->
-  <section class="card">
+  <section class="card locked-section">
     <h3>2. Add an API endpoint</h3>
     <p class="muted">Connect your upstream API to the gateway.</p>
     <label for="devKey">Developer key</label>
-    <input id="devKey" placeholder="Generated after registration" />
+    <input id="devKey" type="password" placeholder="Generated after registration" readonly />
     <label for="epName">Endpoint name</label>
     <input id="epName" placeholder="e.g. Sentiment Analysis" />
     <label for="epDesc">Description</label>
@@ -45,28 +79,30 @@
   </section>
 
   <!-- 3. My endpoints -->
-  <section class="card">
+  <section class="card locked-section">
     <h3>3. My endpoints</h3>
     <p class="muted">View and manage your registered APIs.</p>
     <button id="loadEndpointsBtn">Load my endpoints</button>
     <div id="endpointsList" class="table-wrap" style="margin-top:1rem;"></div>
   </section>
 
-  <!-- 4. Revenue & usage -->
-  <section class="card">
+  <!-- 4. Revenue, usage & fees -->
+  <section class="card locked-section">
     <h3>4. Revenue & usage</h3>
-    <p class="muted">Track earnings and see who's calling your APIs.</p>
+    <p class="muted">Track earnings, see who's calling your APIs, and view platform fees.</p>
     <div class="button-row">
       <button id="revenueBtn">Load revenue</button>
       <button id="usageBtn" class="secondary">Recent calls</button>
+      <button id="feesBtn" class="secondary">Platform fees owed</button>
     </div>
     <div id="revenueInfo" style="margin-top:1rem;"></div>
     <div id="usageList" class="table-wrap" style="margin-top:1rem;"></div>
+    <div id="feesInfo" style="margin-top:1rem;"></div>
   </section>
 </main>
 
 <!-- Security settings -->
-<section class="card" style="margin-bottom:24px;">
+<section class="card locked-section" style="margin-bottom:24px;">
   <h3>5. Security settings</h3>
   <p class="muted">Configure rate limiting, DDoS protection, IP filtering, and threat detection. Changes take effect immediately.</p>
   <button id="loadSecurityBtn" style="margin-bottom:1rem;">Load current settings</button>
@@ -118,12 +154,6 @@
   </div>
 </section>
 
-<section class="output-layout" style="grid-template-columns: 1fr;">
-  <div class="output-card">
-    <h3>Latest response</h3>
-    <pre id="output">Ready.</pre>
-  </div>
-</section>
 {% endblock %}
 
 {% block scripts %}

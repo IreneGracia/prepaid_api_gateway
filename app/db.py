@@ -64,30 +64,23 @@ def init_db():
               created_at TEXT NOT NULL
             );
 
-            CREATE TABLE IF NOT EXISTS escrows (
-              id TEXT PRIMARY KEY,
-              user_id TEXT NOT NULL,
-              escrow_sequence INTEGER NOT NULL,
-              sender_address TEXT NOT NULL,
-              amount_drops INTEGER NOT NULL,
-              total_credits INTEGER NOT NULL,
-              claimed_credits INTEGER NOT NULL DEFAULT 0,
-              status TEXT NOT NULL DEFAULT 'active',
-              condition TEXT,
-              fulfillment TEXT,
-              tx_hash TEXT,
-              finish_after TEXT,
-              cancel_after TEXT,
-              created_at TEXT NOT NULL,
-              FOREIGN KEY(user_id) REFERENCES users(id)
-            );
-
             CREATE TABLE IF NOT EXISTS developers (
               id TEXT PRIMARY KEY,
               name TEXT NOT NULL,
               email TEXT NOT NULL UNIQUE,
               developer_key TEXT NOT NULL UNIQUE,
+              xrpl_address TEXT NOT NULL DEFAULT '',
               created_at TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS platform_fees (
+              id TEXT PRIMARY KEY,
+              developer_id TEXT NOT NULL,
+              amount_credits INTEGER NOT NULL,
+              amount_xrp REAL NOT NULL,
+              status TEXT NOT NULL DEFAULT 'unpaid',
+              created_at TEXT NOT NULL,
+              FOREIGN KEY(developer_id) REFERENCES developers(id)
             );
 
             CREATE TABLE IF NOT EXISTS api_endpoints (
@@ -328,131 +321,51 @@ def get_ledger_by_user_id(user_id: str):
     return ledger
 
 
-def create_escrow(user_id: str, escrow_sequence: int, sender_address: str,
-                   amount_drops: int, total_credits: int, tx_hash: str = None,
-                   condition: str = None, fulfillment: str = None,
-                   finish_after: str = None, cancel_after: str = None):
-    '''
-    Record a new XRPL escrow that locks funds on-chain.
-
-    The escrow holds XRP on the XRPL itself — the gateway never takes custody.
-    Credits are provisioned based on the locked amount.
-    '''
-    escrow_id = str(uuid.uuid4())
+def record_platform_fee(developer_id: str, amount_credits: int, amount_xrp: float):
+    '''Record a platform fee owed by a developer.'''
+    fee_id = str(uuid.uuid4())
     created_at = datetime.now(timezone.utc).isoformat()
 
     with get_connection() as connection:
         connection.execute(
             '''
-            INSERT INTO escrows (id, user_id, escrow_sequence, sender_address,
-                                 amount_drops, total_credits, claimed_credits,
-                                 status, condition, fulfillment, tx_hash,
-                                 finish_after, cancel_after, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, 0, 'active', ?, ?, ?, ?, ?, ?)
+            INSERT INTO platform_fees (id, developer_id, amount_credits, amount_xrp, status, created_at)
+            VALUES (?, ?, ?, ?, 'unpaid', ?)
             ''',
-            (escrow_id, user_id, escrow_sequence, sender_address,
-             amount_drops, total_credits, condition, fulfillment,
-             tx_hash, finish_after, cancel_after, created_at),
+            (fee_id, developer_id, amount_credits, amount_xrp, created_at),
         )
         connection.commit()
 
-    return escrow_id
+    return fee_id
 
 
-def get_active_escrows(user_id: str):
-    '''Get all active escrows for a user (where unclaimed credits remain).'''
-    with get_connection() as connection:
-        rows = connection.execute(
-            '''
-            SELECT * FROM escrows
-            WHERE user_id = ? AND status = 'active'
-            ORDER BY created_at ASC
-            ''',
-            (user_id,),
-        ).fetchall()
-
-    return [dict(row) for row in rows]
-
-
-def get_escrow_by_sequence(sender_address: str, escrow_sequence: int):
-    '''Look up an escrow by sender address and sequence number.'''
+def get_developer_fees(developer_id: str):
+    '''Get total fees owed by a developer.'''
     with get_connection() as connection:
         row = connection.execute(
             '''
-            SELECT * FROM escrows
-            WHERE sender_address = ? AND escrow_sequence = ?
+            SELECT COALESCE(SUM(amount_credits), 0) AS total_credits,
+                   COALESCE(SUM(amount_xrp), 0) AS total_xrp
+            FROM platform_fees
+            WHERE developer_id = ? AND status = 'unpaid'
             ''',
-            (sender_address, escrow_sequence),
+            (developer_id,),
         ).fetchone()
-
-    return dict(row) if row else None
-
-
-def claim_escrow_credits(escrow_id: str, credits_to_claim: int):
-    '''
-    Mark credits as claimed from an escrow.
-
-    Called when the gateway finishes (claims) part of an escrow
-    after credits have been consumed by API usage.
-    '''
-    with get_connection() as connection:
-        connection.execute(
-            '''
-            UPDATE escrows
-            SET claimed_credits = claimed_credits + ?
-            WHERE id = ?
-            ''',
-            (credits_to_claim, escrow_id),
-        )
-        # Mark fully claimed escrows as completed
-        connection.execute(
-            '''
-            UPDATE escrows
-            SET status = 'completed'
-            WHERE id = ? AND claimed_credits >= total_credits
-            ''',
-            (escrow_id,),
-        )
-        connection.commit()
-
-
-def cancel_escrow(escrow_id: str):
-    '''Mark an escrow as cancelled (user reclaimed their XRP).'''
-    with get_connection() as connection:
-        connection.execute(
-            "UPDATE escrows SET status = 'cancelled' WHERE id = ?",
-            (escrow_id,),
-        )
-        connection.commit()
-
-
-def get_escrow_summary(user_id: str) -> dict:
-    '''
-    Get a summary of a user's escrow state.
-
-    Returns total locked, total claimed, and remaining credits
-    across all active escrows.
-    '''
-    with get_connection() as connection:
-        row = connection.execute(
-            '''
-            SELECT
-                COALESCE(SUM(total_credits), 0) AS total_locked,
-                COALESCE(SUM(claimed_credits), 0) AS total_claimed
-            FROM escrows
-            WHERE user_id = ? AND status = 'active'
-            ''',
-            (user_id,),
-        ).fetchone()
-
-    total_locked = int(row["total_locked"])
-    total_claimed = int(row["total_claimed"])
 
     return {
-        "totalLocked": total_locked,
-        "totalClaimed": total_claimed,
-        "remainingEscrowed": total_locked - total_claimed,
+        "owedCredits": int(row["total_credits"]),
+        "owedXrp": round(float(row["total_xrp"]), 6),
     }
+
+
+def update_developer_xrpl_address(developer_id: str, xrpl_address: str):
+    '''Update a developer's XRPL address.'''
+    with get_connection() as connection:
+        connection.execute(
+            "UPDATE developers SET xrpl_address = ? WHERE id = ?",
+            (xrpl_address, developer_id),
+        )
+        connection.commit()
 
 
 def verify_ledger(user_id: str) -> dict:
@@ -491,7 +404,7 @@ def verify_ledger(user_id: str) -> dict:
 
 # ── Developer functions ──
 
-def create_developer(name: str, email: str):
+def create_developer(name: str, email: str, xrpl_address: str = ""):
     '''Create a new developer and issue a developer key.'''
     dev_id = str(uuid.uuid4())
     developer_key = f"dev_{uuid.uuid4().hex}"
@@ -500,10 +413,10 @@ def create_developer(name: str, email: str):
     with get_connection() as connection:
         connection.execute(
             '''
-            INSERT INTO developers (id, name, email, developer_key, created_at)
-            VALUES (?, ?, ?, ?, ?)
+            INSERT INTO developers (id, name, email, developer_key, xrpl_address, created_at)
+            VALUES (?, ?, ?, ?, ?, ?)
             ''',
-            (dev_id, name, email, developer_key, created_at),
+            (dev_id, name, email, developer_key, xrpl_address, created_at),
         )
         connection.commit()
 
@@ -512,6 +425,7 @@ def create_developer(name: str, email: str):
         "name": name,
         "email": email,
         "developerKey": developer_key,
+        "xrplAddress": xrpl_address,
         "createdAt": created_at,
     }
 
@@ -522,6 +436,16 @@ def find_developer_by_key(developer_key: str):
         row = connection.execute(
             "SELECT * FROM developers WHERE developer_key = ?",
             (developer_key,),
+        ).fetchone()
+    return dict(row) if row else None
+
+
+def find_developer_by_id(developer_id: str):
+    '''Find a developer by their ID.'''
+    with get_connection() as connection:
+        row = connection.execute(
+            "SELECT * FROM developers WHERE id = ?",
+            (developer_id,),
         ).fetchone()
     return dict(row) if row else None
 
@@ -699,15 +623,37 @@ def get_all_developers():
     return [dict(row) for row in rows]
 
 
-def get_all_escrows():
-    '''Get all escrows across all users.'''
+def get_all_payments():
+    '''Get all XRP payments from the ledger.'''
     with get_connection() as connection:
         rows = connection.execute(
             '''
-            SELECT e.*, u.name AS user_name
-            FROM escrows e
-            JOIN users u ON e.user_id = u.id
-            ORDER BY e.created_at DESC
+            SELECT l.delta_credits, l.reason, l.meta, l.created_at, u.name AS user_name
+            FROM ledger_entries l
+            JOIN users u ON l.user_id = u.id
+            WHERE l.delta_credits > 0
+            ORDER BY l.created_at DESC
+            '''
+        ).fetchall()
+
+    results = []
+    for row in rows:
+        item = dict(row)
+        if item.get("meta"):
+            item["meta"] = json.loads(item["meta"])
+        results.append(item)
+    return results
+
+
+def get_all_fees():
+    '''Get all platform fees across all developers.'''
+    with get_connection() as connection:
+        rows = connection.execute(
+            '''
+            SELECT f.*, d.name AS developer_name
+            FROM platform_fees f
+            JOIN developers d ON f.developer_id = d.id
+            ORDER BY f.created_at DESC
             '''
         ).fetchall()
     return [dict(row) for row in rows]

@@ -12,30 +12,32 @@ import httpx
 
 from app.db import (
     add_credits,
-    claim_escrow_credits,
     create_api_endpoint,
     create_developer,
     create_user,
     find_developer_by_email,
-    find_user_by_email,
+    find_developer_by_id,
     find_developer_by_key,
     find_user_by_api_key,
-    get_active_escrows,
+    find_user_by_email,
     get_all_developers,
     get_all_endpoints,
-    get_all_escrows,
+    get_all_fees,
+    get_all_payments,
     get_all_users,
     get_balance_by_api_key,
     get_balance_by_user_id,
+    get_developer_fees,
     get_developer_revenue,
     get_developer_usage,
     get_endpoint_by_id,
     get_endpoints_by_developer,
-    get_escrow_summary,
     get_ledger_by_user_id,
     get_platform_stats,
     init_db,
     record_api_call,
+    record_platform_fee,
+    update_developer_xrpl_address,
     update_endpoint,
     verify_ledger,
 )
@@ -50,7 +52,7 @@ from app.models import (
     UpdateEndpointRequest,
     XamanTopupRequest,
 )
-from app.xaman import create_escrow_request, get_payload_status
+from app.xaman import create_payment_request, get_payload_status
 
 load_dotenv()
 
@@ -221,9 +223,54 @@ async def register_user(payload: RegisterRequest):
 # Track which Xaman payloads have already been credited (prevent double-credit)
 _credited_payloads = set()
 
-# Track payload → api_key mapping so we can credit the right user
+# Track payload → api_key/credits/endpoint mapping
 _payload_to_apikey = {}
 _payload_to_credits = {}
+_payload_to_endpoint = {}
+
+
+@app.post("/api/topup/xrp")
+async def topup_xrp(payload: XamanTopupRequest):
+    '''
+    POST /api/topup/xrp
+
+    Creates a Xaman Payment request. XRP goes directly to the
+    developer's XRPL address — the platform never touches the funds.
+    '''
+    user = find_user_by_api_key(payload.apiKey)
+    if not user:
+        raise HTTPException(status_code=404, detail={"error": "API key not found"})
+
+    # Look up which endpoint this customer is registered for
+    endpoint_id = payload.endpointId if hasattr(payload, 'endpointId') and payload.endpointId else None
+
+    if not endpoint_id:
+        raise HTTPException(status_code=400, detail={"error": "Endpoint ID required to determine payment destination"})
+
+    endpoint = get_endpoint_by_id(endpoint_id)
+    if not endpoint:
+        raise HTTPException(status_code=404, detail={"error": "Endpoint not found"})
+
+    dev = find_developer_by_id(endpoint["developer_id"])
+    if not dev or not dev.get("xrpl_address"):
+        raise HTTPException(status_code=400, detail={"error": "Developer has no XRPL address configured"})
+
+    result = await create_payment_request(
+        destination=dev["xrpl_address"],
+        credits=payload.credits,
+        api_key=payload.apiKey,
+    )
+
+    if result.get("payloadId"):
+        _payload_to_apikey[result["payloadId"]] = payload.apiKey
+        _payload_to_credits[result["payloadId"]] = payload.credits
+        _payload_to_endpoint[result["payloadId"]] = endpoint_id
+
+    return {
+        "message": "Scan QR to pay — XRP goes directly to the developer",
+        "developerAddress": dev["xrpl_address"],
+        **result,
+    }
 
 
 @app.get("/api/topup/xaman/{payload_id}")
@@ -232,151 +279,47 @@ async def topup_xaman_status(payload_id: str):
     GET /api/topup/xaman/{payload_id}
 
     Check the status of a Xaman payment request.
-    If signed, credits the user's account immediately.
+    If signed, credits the user's account and records the platform fee.
     '''
     result = await get_payload_status(payload_id)
 
-    # If signed and not already credited, add credits now
     if result.get("signed") and payload_id not in _credited_payloads:
         api_key = _payload_to_apikey.get(payload_id)
         credits = _payload_to_credits.get(payload_id, 0)
+        endpoint_id = _payload_to_endpoint.get(payload_id)
 
         if api_key and credits > 0:
             user = find_user_by_api_key(api_key)
             if user:
+                tx_hash = result.get("txHash")
+
+                # Credit the account
                 add_credits(
                     user_id=user["id"],
                     delta_credits=credits,
-                    reason="xrpl_escrow_topup",
+                    reason="xrpl_topup",
                     meta={
                         "payloadId": payload_id,
-                        "txHash": result.get("txHash"),
+                        "txHash": tx_hash,
                         "credits": credits,
+                        "senderAddress": result.get("account"),
                     },
                 )
+
+                # Record platform fee (5% of credits)
+                if endpoint_id:
+                    endpoint = get_endpoint_by_id(endpoint_id)
+                    if endpoint:
+                        fee_credits = max(1, int(credits * 0.05))
+                        fee_xrp = fee_credits / CREDITS_PER_XRP
+                        record_platform_fee(endpoint["developer_id"], fee_credits, fee_xrp)
+
                 _credited_payloads.add(payload_id)
                 result["creditsAdded"] = credits
                 result["newBalance"] = get_balance_by_user_id(user["id"])
                 print(f"Credited {credits} credits to {api_key} via Xaman payload {payload_id}")
 
     return result
-
-
-@app.post("/api/topup/escrow")
-async def topup_escrow(payload: XamanTopupRequest):
-    '''
-    POST /api/topup/escrow
-
-    Creates a Xaman EscrowCreate request. The user locks XRP on the XRPL
-    itself — the gateway never takes custody of the funds.
-
-    Credits are provisioned once the escrow is detected by the listener.
-    The gateway claims XRP from the escrow as credits are consumed.
-    Unused credits can be reclaimed by the user after the cancel_after time.
-    '''
-    user = find_user_by_api_key(payload.apiKey)
-    if not user:
-        raise HTTPException(status_code=404, detail={"error": "API key not found"})
-
-    receiver = os.getenv("XRPL_RECEIVER_ADDRESS", "")
-    if not receiver:
-        raise HTTPException(status_code=500, detail={"error": "XRPL receiver address not configured"})
-
-    result = await create_escrow_request(
-        destination=receiver,
-        credits=payload.credits,
-        api_key=payload.apiKey,
-    )
-
-    # Store mapping so the status endpoint can credit the right user
-    if result.get("payloadId"):
-        _payload_to_apikey[result["payloadId"]] = payload.apiKey
-        _payload_to_credits[result["payloadId"]] = payload.credits
-
-    return {
-        "message": "Scan QR to lock XRP in escrow (non-custodial)",
-        **result,
-    }
-
-
-@app.get("/api/escrow/{api_key}")
-async def get_escrow_info(api_key: str):
-    '''
-    GET /api/escrow/{api_key}
-
-    Returns the escrow summary for a user: total locked, claimed,
-    and remaining escrowed credits.
-    '''
-    user = find_user_by_api_key(api_key)
-    if not user:
-        raise HTTPException(status_code=404, detail={"error": "API key not found"})
-
-    summary = get_escrow_summary(user["id"])
-    escrows = get_active_escrows(user["id"])
-
-    return {
-        "apiKey": api_key,
-        **summary,
-        "activeEscrows": escrows,
-    }
-
-
-@app.post("/api/escrow/{api_key}/claim")
-async def claim_from_escrow(api_key: str):
-    '''
-    POST /api/escrow/{api_key}/claim
-
-    Claims consumed credits from the oldest active escrow.
-    This triggers an EscrowFinish on the XRPL, releasing the
-    corresponding XRP to the gateway.
-
-    Only claims credits that have already been used (consumed).
-    '''
-    user = find_user_by_api_key(api_key)
-    if not user:
-        raise HTTPException(status_code=404, detail={"error": "API key not found"})
-
-    escrows = get_active_escrows(user["id"])
-    if not escrows:
-        raise HTTPException(status_code=404, detail={"error": "No active escrows"})
-
-    from app.escrow import finish_escrow
-
-    results = []
-    for escrow in escrows:
-        unclaimed = escrow["total_credits"] - escrow["claimed_credits"]
-        if unclaimed <= 0:
-            continue
-
-        # Calculate how many credits have been consumed from this escrow
-        balance = get_balance_by_user_id(user["id"])
-        consumed = escrow["total_credits"] - balance if balance < escrow["total_credits"] else 0
-        to_claim = min(consumed, unclaimed)
-
-        if to_claim <= 0:
-            continue
-
-        try:
-            result = finish_escrow(
-                sender_address=escrow["sender_address"],
-                escrow_sequence=escrow["escrow_sequence"],
-                condition=escrow["condition"],
-                fulfillment=escrow["fulfillment"],
-            )
-            if result["success"]:
-                claim_escrow_credits(escrow["id"], to_claim)
-                results.append({
-                    "escrowId": escrow["id"],
-                    "creditsClaimed": to_claim,
-                    "txHash": result["txHash"],
-                })
-        except Exception as e:
-            results.append({
-                "escrowId": escrow["id"],
-                "error": str(e),
-            })
-
-    return {"claimed": results}
 
 
 @app.post("/api/topup/mock")
@@ -520,7 +463,7 @@ async def proxy_summarise(payload: SummariseRequest, x_api_key: str | None = Hea
 
     This simulates a protected compute endpoint.
 
-    In a production version, this route would likely:
+    In a production version, this route would:
     - forward the request to a real upstream API
     - charge per endpoint or per usage unit
     - return the upstream provider's response
@@ -569,6 +512,7 @@ async def login_developer(payload: LoginRequest):
         "name": dev["name"],
         "email": dev["email"],
         "developerKey": dev["developer_key"],
+        "xrplAddress": dev.get("xrpl_address", ""),
         "createdAt": dev["created_at"],
     }}
 
@@ -577,7 +521,7 @@ async def login_developer(payload: LoginRequest):
 async def register_developer(payload: DeveloperRegisterRequest):
     '''Register a new developer and get a developer key.'''
     try:
-        dev = create_developer(payload.name, payload.email)
+        dev = create_developer(payload.name, payload.email, payload.xrplAddress)
         return {"message": "Developer registered", "developer": dev}
     except Exception as error:
         raise HTTPException(
@@ -673,6 +617,44 @@ async def dev_update_security(developer_key: str, request: Request):
     from app.security.config import update_settings, get_all_settings
     update_settings(settings)
     return {"message": "Security settings updated", "settings": get_all_settings()}
+
+
+@app.get("/api/developer/{developer_key}/fees")
+async def dev_fees(developer_key: str):
+    '''Get platform fees owed by this developer.'''
+    dev = find_developer_by_key(developer_key)
+    if not dev:
+        raise HTTPException(status_code=404, detail={"error": "Developer key not found"})
+    return get_developer_fees(dev["id"])
+
+
+@app.put("/api/developer/{developer_key}/xrpl-address")
+async def dev_update_xrpl(developer_key: str, request: Request):
+    '''Update the developer's XRPL address for receiving payments.'''
+    dev = find_developer_by_key(developer_key)
+    if not dev:
+        raise HTTPException(status_code=404, detail={"error": "Developer key not found"})
+
+    body = await request.json()
+    xrpl_address = body.get("xrplAddress", "")
+    if not xrpl_address or not xrpl_address.startswith("r"):
+        raise HTTPException(status_code=400, detail={"error": "Invalid XRPL address"})
+
+    # Verify the address exists on the XRPL testnet
+    try:
+        from xrpl.clients import JsonRpcClient
+        from xrpl.models.requests import AccountInfo
+        xrpl_client = JsonRpcClient(os.getenv("XRPL_RPC", "https://s.altnet.rippletest.net:51234"))
+        resp = xrpl_client.request(AccountInfo(account=xrpl_address))
+        if not resp.is_successful():
+            raise HTTPException(status_code=400, detail={"error": "XRPL address not found on testnet"})
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(status_code=400, detail={"error": "Could not verify XRPL address — check the address and try again"})
+
+    update_developer_xrpl_address(dev["id"], xrpl_address)
+    return {"message": "XRPL address updated", "xrplAddress": xrpl_address}
 
 
 # ═══════════════════════════════════════════
@@ -875,10 +857,16 @@ async def admin_endpoints(_=Depends(require_admin_auth)):
     return {"endpoints": get_all_endpoints()}
 
 
-@app.get("/api/admin/escrows")
-async def admin_escrows(_=Depends(require_admin_auth)):
-    '''All escrows across all customers.'''
-    return {"escrows": get_all_escrows()}
+@app.get("/api/admin/payments")
+async def admin_payments(_=Depends(require_admin_auth)):
+    '''All XRP payments received.'''
+    return {"payments": get_all_payments()}
+
+
+@app.get("/api/admin/fees")
+async def admin_fees(_=Depends(require_admin_auth)):
+    '''All platform fees owed by developers.'''
+    return {"fees": get_all_fees()}
 
 
 @app.get("/api/admin/security-log")
