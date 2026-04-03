@@ -1,31 +1,32 @@
 # Prepaid API Gateway
 
-A platform that lets developers monetise their APIs using prepaid credits settled on the XRP Ledger. Developers register their API endpoints, set pricing in XRP, and share a registration link with customers. Customers pay with XRP via Xaman wallet, receive credits, and call the API — credits are checked and deducted in real time on every request.
+A platform that lets developers monetise their APIs using prepaid credits settled on the XRP Ledger. Developers register their API endpoints, set pricing in XRP, and share a registration link with customers. Customers pay with XRP via Xaman wallet — XRP goes directly to the developer's XRPL address. Credits are checked and deducted in real time on every request. The platform never holds funds.
 
 ## How it works
 
 ```
-Developer registers API endpoint → sets price per call in XRP → gets a shareable link
-Customer clicks link → registers → tops up credits with XRP → calls the API
-Gateway checks balance → deducts credits → forwards request to upstream → returns response
+Developer registers with XRPL address → adds API endpoint → sets price in XRP → gets a shareable link
+Customer clicks link → registers → pays XRP (goes directly to developer) → gets credits
+Customer calls API → gateway checks balance → deducts credits → forwards request → returns response
 ```
 
 ## Key features
 
 - **Prepaid credit system** — no credits = no access. Zero credit risk
-- **XRPL payments** — customers pay with XRP via Xaman wallet (testnet). Instant, global, near-zero fees
-- **Non-custodial escrow** — XRP locked on-chain via XRPL escrow, gateway never holds customer funds
-- **Real proxy forwarding** — gateway forwards requests to the developer's upstream API with auth headers
+- **Direct XRPL payments** — XRP goes from customer straight to developer's wallet. Platform never touches the funds
+- **Non-custodial** — the platform is not a custodian. It orchestrates payments, not holds them
 - **Tamper-proof ledger** — every credit movement is SHA-256 hash-chained. Customers can verify integrity
 - **Configurable exchange rate** — developer sets `CREDITS_PER_XRP` (e.g. 100 credits per XRP)
+- **Platform fee tracking** — 5% fee recorded per payment, owed by developer. Don't pay = endpoints disabled
 - **Security middleware** — rate limiting, DDoS protection, IP filtering, request validation, brute force detection — all configurable from the developer dashboard
-- **Developer dashboard** — register endpoints, set pricing, track revenue, configure security
-- **Customer portal** — endpoint-specific registration pages with top-up and API calling
+- **Developer dashboard** — register with XRPL address, add endpoints, set pricing in XRP, track revenue, configure security
+- **Customer portal** — endpoint-specific registration pages (via shared link) with XRP payment and API calling
 
 ## Quick start
 
 ```bash
 pip install -r requirements.txt
+rm -f gateway.db
 uvicorn app.main:app --reload --port 8001
 ```
 
@@ -43,21 +44,20 @@ Go to http://localhost:8001/portal/developer
 
 **Step 2 — Register as a developer**
 
-- Enter your name and email
 - Click "Register new account"
-- Your developer key (`dev_*`) will appear in the "Developer key" field
-- If you already registered, just enter your email and click "Sign in"
+- Enter a username, email, and your XRPL address (from your Xaman wallet — starts with `r`)
+- Click "Register"
+- Sections 2-5 will unlock after successful registration
+- If you already registered, click "Sign in" and enter your email
 
 **Step 3 — Add an API endpoint**
 
-- Your developer key should already be filled in from Step 2
 - Fill in the endpoint details:
-  - Name: `Text Summariser`
+  - Endpoint name: `Text Summariser`
   - Description: `Summarises text to the first 20 words`
   - Upstream URL: `http://localhost:8001/api/proxy/summarise`
   - Cost per call: `0.01` XRP
 - Click "Add endpoint"
-- The response panel will show the new endpoint with its `id`
 
 **Step 4 — Get the customer link**
 
@@ -77,10 +77,11 @@ Go to http://localhost:8001/portal/developer
 
 **Step 6 — Register as a customer**
 
-- Enter a name and email (use a different email than the developer)
 - Click "Register new account"
-- Your API key (`pag_*`) will appear in the "API key" field
-- If you already registered, just enter your email and click "Sign in"
+- Enter a username and email (use a different email than the developer)
+- Click "Register new account"
+- Your API key will be set (shown as dots for security)
+- If you already registered, click "Sign in" and enter your email
 
 **Step 7 — Top up credits**
 
@@ -91,10 +92,10 @@ Option A — Mock top-up (for demo, no real payment):
 
 Option B — Pay with XRP via Xaman (real XRPL testnet payment):
 - Enter the number of credits (e.g. `100`)
-- Click "Pay with XRP (non-custodial)"
+- Click "Pay with XRP"
 - A QR code appears
 - Open the Xaman app on your phone and scan the QR code
-- Approve the transaction in Xaman
+- Approve the transaction — XRP goes directly to the developer's XRPL address
 - Wait a few seconds — the portal polls for confirmation
 - Once confirmed, credits are added to your account
 
@@ -126,12 +127,13 @@ Option B — Pay with XRP via Xaman (real XRPL testnet payment):
 **Step 12 — Go back to the developer dashboard**
 
 - Go to http://localhost:8001/portal/developer
-- Sign in with your developer email
+- Click "Sign in" and enter your developer email
 
 **Step 13 — Check revenue and usage**
 
 - Click "Load revenue" — shows total credits earned and per-endpoint breakdown
 - Click "Recent calls" — shows who called, when, which endpoint, and how much it cost
+- Click "Platform fees owed" — shows 5% platform fee accumulated
 
 ### Part 4: Admin overview
 
@@ -142,7 +144,8 @@ Option B — Pay with XRP via Xaman (real XRPL testnet payment):
 - Click "Load developers" — see all registered developers
 - Click "Load endpoints" — see all API endpoints across all developers
 - Click "Load customers" — see all customers with their balances
-- Click "Load escrows" — see all XRPL escrows (if any XRP payments were made)
+- Click "Load payments" — see all XRP payments received
+- Click "Load fees" — see all platform fees owed by developers
 
 ## Interfaces
 
@@ -159,11 +162,11 @@ Option B — Pay with XRP via Xaman (real XRPL testnet payment):
 ```
 app/
   main.py             — FastAPI routes (developer, customer, proxy, admin)
-  db.py               — SQLite database (users, developers, endpoints, escrows, ledger, calls)
+  db.py               — SQLite database (users, developers, endpoints, fees, ledger, calls)
   models.py           — Pydantic request models
-  xaman.py            — Xaman wallet integration (escrow QR codes)
-  xrpl_listener.py    — XRPL websocket listener for incoming payments/escrows
-  escrow.py           — XRPL escrow operations (finish/cancel)
+  xaman.py            — Xaman wallet integration (payment QR codes)
+  xrpl_listener.py    — XRPL websocket listener for incoming payments (backup)
+  escrow.py           — XRPL escrow operations (legacy, not used in current model)
   security/
     __init__.py        — Registers all middleware on the app
     config.py          — Security settings (runtime-configurable via dashboard)
@@ -194,40 +197,63 @@ static/
 - `POST /api/developer/login` — sign in as developer by email, returns developer key
 
 ### Customer
-- `POST /api/register` — register and get an API key
+- `POST /api/register` — register with username and email, get an API key
+- `POST /api/topup/xrp` — create Xaman payment (XRP goes directly to developer)
 - `POST /api/topup/mock` — add credits (demo)
-- `POST /api/topup/escrow` — create Xaman escrow request (non-custodial XRP payment)
 - `GET /api/topup/xaman/{payload_id}` — check payment status (also credits account when signed)
 - `GET /api/balance/{api_key}` — check credit balance
 - `GET /api/ledger/{api_key}` — view transaction history
 - `GET /api/ledger/{api_key}/verify` — verify ledger integrity
 - `POST /api/proxy/call` — call an endpoint by ID
 - `POST /api/proxy/{endpoint_id}/{path}` — call any path on an endpoint
-- `GET /api/escrow/{api_key}` — view escrow status
-- `POST /api/escrow/{api_key}/claim` — claim consumed credits from escrow
 
 ### Developer
-- `POST /api/developer/register` — register and get a developer key
+- `POST /api/developer/register` — register with username, email, and XRPL address
 - `POST /api/developer/endpoint` — add an API endpoint
 - `PUT /api/developer/endpoint/{id}` — update an endpoint
 - `GET /api/developer/{key}/endpoints` — list your endpoints
 - `GET /api/developer/{key}/revenue` — revenue stats
 - `GET /api/developer/{key}/usage` — recent call logs
+- `GET /api/developer/{key}/fees` — platform fees owed
 - `GET /api/developer/{key}/security` — view security settings
 - `PUT /api/developer/{key}/security` — update security settings
+- `PUT /api/developer/{key}/xrpl-address` — update XRPL address (validated against testnet)
 
 ### Admin
 - `GET /api/admin/stats` — platform-wide metrics
 - `GET /api/admin/customers` — all customers
 - `GET /api/admin/developers` — all developers
 - `GET /api/admin/endpoints` — all endpoints
-- `GET /api/admin/escrows` — all escrows
+- `GET /api/admin/payments` — all XRP payments
+- `GET /api/admin/fees` — all platform fees owed
 - `GET /api/admin/security-log` — recent security events
 
 ### Public
 - `GET /api/endpoints` — list all active endpoints
 - `GET /api/config` — exchange rate (credits per XRP)
 - `GET /health` — health check
+
+## Payment model
+
+1. Customer pays XRP via Xaman → XRP goes **directly to the developer's XRPL address**
+2. Platform never holds customer or developer funds (non-custodial)
+3. Gateway provisions credits in the local database
+4. Credits are non-refundable (same model as OpenAI, Twilio, AWS)
+5. Platform records a 5% fee owed by the developer per payment
+6. Developer doesn't pay fees → platform disables their endpoints
+7. All payments are on the public XRPL — independently verifiable by both sides
+
+## How the credit model works
+
+1. Developer registers with their XRPL address and adds API endpoints with pricing in XRP
+2. Developer shares a customer registration link for each endpoint
+3. Customer clicks the link, registers with a username and email, and receives an API key
+4. Customer tops up credits by paying XRP (directly to developer) or using mock credits for demo
+5. Customer calls the API using their API key
+6. Gateway checks balance → deducts credits → forwards request to developer's upstream API → returns response
+7. If balance is insufficient, the request is blocked with HTTP 402
+8. All credit movements are SHA-256 hash-chained — customers can verify nothing has been tampered with
+9. All XRP payments are recorded on the public XRPL — independently verifiable by both sides
 
 ## Configuration (.env)
 
@@ -241,7 +267,7 @@ static/
 | `XRPL_ENABLED` | Enable the XRPL websocket listener | true |
 | `XRPL_SERVER` | XRPL testnet websocket URL | wss://s.altnet.rippletest.net:51233 |
 | `XRPL_RPC` | XRPL testnet RPC URL | https://s.altnet.rippletest.net:51234 |
-| `XRPL_RECEIVER_ADDRESS` | Gateway's XRPL testnet address | |
+| `XRPL_RECEIVER_ADDRESS` | Gateway's XRPL testnet address (for listener) | |
 | `XRPL_RECEIVER_SEED` | Gateway's XRPL testnet wallet seed | |
 | `XAMAN_API_KEY` | Xaman API key (from apps.xumm.dev) | |
 | `XAMAN_API_SECRET` | Xaman API secret | |
@@ -249,15 +275,3 @@ static/
 | `SEC_ADMIN_USERNAME` | Admin login username | admin |
 | `SEC_ADMIN_PASSWORD` | Admin login password | admin |
 | `SEC_JWT_SECRET` | Secret for signing JWT tokens | |
-
-## How the credit model works
-
-1. Developer registers an API endpoint and sets a price in XRP per call
-2. Developer shares a customer registration link
-3. Customer clicks the link, registers, and receives an API key
-4. Customer tops up credits by paying XRP (via Xaman escrow or mock for demo)
-5. Customer calls the API using their API key
-6. Gateway checks balance → deducts credits → forwards request to developer's upstream API → returns response
-7. If balance is insufficient, the request is blocked with HTTP 402
-8. All credit movements are SHA-256 hash-chained — customers can verify nothing has been tampered with
-9. All XRP payments are recorded on the public XRPL — independently verifiable by both sides

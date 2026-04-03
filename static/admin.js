@@ -47,7 +47,7 @@ document.getElementById("loadDevsBtn").addEventListener("click", async () => {
 
   els.devsList.innerHTML = `
     <table>
-      <thead><tr><th>Name</th><th>Email</th><th>Dev Key</th><th>Joined</th></tr></thead>
+      <thead><tr><th>Username</th><th>Email</th><th>Dev Key</th><th>Joined</th></tr></thead>
       <tbody>${rows}</tbody>
     </table>`;
 });
@@ -99,7 +99,7 @@ document.getElementById("loadCustomersBtn").addEventListener("click", async () =
 
   els.customersList.innerHTML = `
     <table>
-      <thead><tr><th>Name</th><th>Email</th><th>Balance</th><th>API Key</th><th>Joined</th></tr></thead>
+      <thead><tr><th>Username</th><th>Email</th><th>Balance</th><th>API Key</th><th>Joined</th></tr></thead>
       <tbody>${rows}</tbody>
     </table>`;
 });
