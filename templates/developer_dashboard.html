@@ -1,0 +1,131 @@
+{% extends "_base.html" %}
+{% set active_portal = "developer" %}
+{% block title %}Developer Dashboard — {{ app_name }}{% endblock %}
+
+{% block content %}
+<header class="hero" style="grid-template-columns: 1fr;">
+  <div>
+    <p class="eyebrow">Developer Dashboard</p>
+    <h1>Configure your APIs and track revenue</h1>
+    <p class="subtitle">Register, add your API endpoints, set pricing per call, and monitor usage — all powered by XRPL.</p>
+  </div>
+</header>
+
+<main class="grid">
+  <!-- 1. Register -->
+  <section class="card">
+    <h3>1. Sign in or register</h3>
+    <p class="muted">Enter your email to sign in, or register a new account.</p>
+    <label for="devName">Name</label>
+    <input id="devName" value="" placeholder="Your name" />
+    <label for="devEmail">Email</label>
+    <input id="devEmail" value="" placeholder="you@example.com" />
+    <div class="button-row">
+      <button id="devLoginBtn">Sign in</button>
+      <button id="devRegisterBtn" class="secondary">Register new account</button>
+    </div>
+  </section>
+
+  <!-- 2. Add endpoint -->
+  <section class="card">
+    <h3>2. Add an API endpoint</h3>
+    <p class="muted">Connect your upstream API to the gateway.</p>
+    <label for="devKey">Developer key</label>
+    <input id="devKey" placeholder="Generated after registration" />
+    <label for="epName">Endpoint name</label>
+    <input id="epName" placeholder="e.g. Sentiment Analysis" />
+    <label for="epDesc">Description</label>
+    <input id="epDesc" placeholder="e.g. Analyses text sentiment" />
+    <label for="epUrl">Upstream URL</label>
+    <input id="epUrl" placeholder="e.g. https://my-api.fly.dev/analyse" />
+    <label for="epXrpCost">Cost per call (XRP)</label>
+    <input id="epXrpCost" type="number" value="0.01" min="0.000001" step="0.001" />
+    <p class="muted" id="devCostPreview" style="margin-top:6px; font-size:13px;"></p>
+    <button id="addEndpointBtn">Add endpoint</button>
+  </section>
+
+  <!-- 3. My endpoints -->
+  <section class="card">
+    <h3>3. My endpoints</h3>
+    <p class="muted">View and manage your registered APIs.</p>
+    <button id="loadEndpointsBtn">Load my endpoints</button>
+    <div id="endpointsList" class="table-wrap" style="margin-top:1rem;"></div>
+  </section>
+
+  <!-- 4. Revenue & usage -->
+  <section class="card">
+    <h3>4. Revenue & usage</h3>
+    <p class="muted">Track earnings and see who's calling your APIs.</p>
+    <div class="button-row">
+      <button id="revenueBtn">Load revenue</button>
+      <button id="usageBtn" class="secondary">Recent calls</button>
+    </div>
+    <div id="revenueInfo" style="margin-top:1rem;"></div>
+    <div id="usageList" class="table-wrap" style="margin-top:1rem;"></div>
+  </section>
+</main>
+
+<!-- Security settings -->
+<section class="card" style="margin-bottom:24px;">
+  <h3>5. Security settings</h3>
+  <p class="muted">Configure rate limiting, DDoS protection, IP filtering, and threat detection. Changes take effect immediately.</p>
+  <button id="loadSecurityBtn" style="margin-bottom:1rem;">Load current settings</button>
+
+  <div id="securityForm" style="display:none;">
+    <div class="grid">
+      <div>
+        <h4 style="margin:0 0 8px; color: var(--accent);">Rate Limiting</h4>
+        <label for="secRateLimitPerKey">Requests per API key (per window)</label>
+        <input id="secRateLimitPerKey" type="number" />
+        <label for="secRateLimitPerIp">Requests per IP (per window)</label>
+        <input id="secRateLimitPerIp" type="number" />
+        <label for="secRateLimitWindow">Window (seconds)</label>
+        <input id="secRateLimitWindow" type="number" />
+      </div>
+
+      <div>
+        <h4 style="margin:0 0 8px; color: var(--accent);">DDoS Protection</h4>
+        <label for="secDdosBurst">Burst threshold (requests)</label>
+        <input id="secDdosBurst" type="number" />
+        <label for="secDdosWindow">Burst window (seconds)</label>
+        <input id="secDdosWindow" type="number" />
+        <label for="secDdosCooldown">Cooldown (seconds)</label>
+        <input id="secDdosCooldown" type="number" />
+      </div>
+
+      <div>
+        <h4 style="margin:0 0 8px; color: var(--accent);">IP Filtering</h4>
+        <label for="secIpWhitelist">IP whitelist (comma-separated, empty = allow all)</label>
+        <input id="secIpWhitelist" placeholder="e.g. 192.168.1.0/24, 10.0.0.1" />
+        <label for="secIpBlacklist">IP blacklist (comma-separated)</label>
+        <input id="secIpBlacklist" placeholder="e.g. 1.2.3.4, 5.6.7.0/24" />
+      </div>
+
+      <div>
+        <h4 style="margin:0 0 8px; color: var(--accent);">Threat Detection</h4>
+        <label for="secBruteForceThreshold">Brute force threshold (failed attempts)</label>
+        <input id="secBruteForceThreshold" type="number" />
+        <label for="secBruteForceWindow">Detection window (seconds)</label>
+        <input id="secBruteForceWindow" type="number" />
+        <label for="secBruteForceBlock">Block duration (seconds)</label>
+        <input id="secBruteForceBlock" type="number" />
+        <label for="secMaxBodySize">Max request body size (bytes)</label>
+        <input id="secMaxBodySize" type="number" />
+      </div>
+    </div>
+
+    <button id="saveSecurityBtn" style="margin-top:1rem;">Save security settings</button>
+  </div>
+</section>
+
+<section class="output-layout" style="grid-template-columns: 1fr;">
+  <div class="output-card">
+    <h3>Latest response</h3>
+    <pre id="output">Ready.</pre>
+  </div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/developer.js"></script>
+{% endblock %}

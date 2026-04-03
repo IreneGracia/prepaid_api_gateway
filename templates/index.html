@@ -1,0 +1,31 @@
+{% extends "_base.html" %}
+{% block title %}{{ app_name }}{% endblock %}
+
+{% block content %}
+<header style="text-align:center; padding: 48px 0 24px;">
+  <p class="eyebrow">Prepaid API Gateway</p>
+  <h1>Monetise your API with prepaid credits and XRPL</h1>
+  <p class="subtitle" style="max-width:640px; margin:12px auto 0;">
+    Developers configure their APIs and share a registration link.
+    Customers pay with XRP and call endpoints. Credits are deducted in real time.
+  </p>
+</header>
+
+<div class="landing-grid" style="grid-template-columns: repeat(2, 1fr);">
+  <a href="/portal/developer" class="landing-card">
+    <div class="card-icon">&#128187;</div>
+    <h2>Developer Dashboard</h2>
+    <p>Register your API endpoints, set pricing per call, configure security, and track revenue. Share a link with your customers.</p>
+  </a>
+
+  <a href="/portal/admin" class="landing-card">
+    <div class="card-icon">&#9881;</div>
+    <h2>Platform Admin</h2>
+    <p>Monitor all developers, customers, endpoints, escrows, and platform-wide metrics.</p>
+  </a>
+</div>
+
+<p class="muted" style="text-align:center; margin-top:24px; font-size:14px;">
+  Customers access the API via a unique link shared by the developer — no generic sign-up page.
+</p>
+{% endblock %}

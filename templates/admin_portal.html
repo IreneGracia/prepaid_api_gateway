@@ -1,0 +1,73 @@
+{% extends "_base.html" %}
+{% set active_portal = "admin" %}
+{% block title %}Admin Dashboard — {{ app_name }}{% endblock %}
+
+{% block content %}
+<header class="hero" style="grid-template-columns: 1fr;">
+  <div>
+    <p class="eyebrow">Admin Dashboard</p>
+    <h1>Manage your gateway</h1>
+    <p class="subtitle">Configure endpoints, monitor customers, track revenue, and manage escrows.</p>
+  </div>
+</header>
+
+<!-- Stats -->
+<div id="statsGrid" class="stats-grid">
+  <div class="stat-card"><div class="stat-value" id="statCustomers">-</div><div class="stat-label">Customers</div></div>
+  <div class="stat-card"><div class="stat-value" id="statDevs">-</div><div class="stat-label">Developers</div></div>
+  <div class="stat-card"><div class="stat-value" id="statEndpoints">-</div><div class="stat-label">Endpoints</div></div>
+  <div class="stat-card"><div class="stat-value" id="statCalls">-</div><div class="stat-label">API Calls</div></div>
+  <div class="stat-card"><div class="stat-value" id="statRevenue">-</div><div class="stat-label">Revenue (credits)</div></div>
+  <div class="stat-card"><div class="stat-value" id="statCredits">-</div><div class="stat-label">Credits Issued</div></div>
+</div>
+
+<div class="button-row" style="margin-bottom:24px;">
+  <button id="refreshStatsBtn">Refresh stats</button>
+</div>
+
+<main class="grid">
+  <!-- Developers -->
+  <section class="card">
+    <h3>Developers</h3>
+    <p class="muted">All registered developers.</p>
+    <button id="loadDevsBtn">Load developers</button>
+    <div id="devsList" class="table-wrap" style="margin-top:1rem;"></div>
+  </section>
+
+  <!-- Endpoints -->
+  <section class="card">
+    <h3>API Endpoints</h3>
+    <p class="muted">All endpoints across all developers.</p>
+    <button id="loadEndpointsBtn">Load endpoints</button>
+    <div id="endpointsList" class="table-wrap" style="margin-top:1rem;"></div>
+  </section>
+
+  <!-- Customers -->
+  <section class="card">
+    <h3>Customers</h3>
+    <p class="muted">All registered customers and their balances.</p>
+    <button id="loadCustomersBtn">Load customers</button>
+    <div id="customersList" class="table-wrap" style="margin-top:1rem;"></div>
+  </section>
+
+  <!-- Escrows -->
+  <section class="card">
+    <h3>Escrows</h3>
+    <p class="muted">All XRPL escrows across all customers.</p>
+    <button id="loadEscrowsBtn">Load escrows</button>
+    <div id="escrowsList" class="table-wrap" style="margin-top:1rem;"></div>
+  </section>
+
+</main>
+
+<section class="output-layout" style="grid-template-columns: 1fr;">
+  <div class="output-card">
+    <h3>Latest response</h3>
+    <pre id="output">Ready.</pre>
+  </div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/admin.js"></script>
+{% endblock %}

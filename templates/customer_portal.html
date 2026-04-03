@@ -1,0 +1,108 @@
+{% extends "_base.html" %}
+{% set active_portal = "customer" %}
+{% block title %}API Access — {{ app_name }}{% endblock %}
+
+{% block content %}
+<!-- Error shown when no ?endpoint= parameter -->
+<div id="noEndpointError" style="display:none; text-align:center; padding:80px 0;">
+  <h1>No endpoint specified</h1>
+  <p class="muted">This page requires a valid endpoint link from a developer.</p>
+</div>
+
+<!-- Main content (shown only when endpoint is valid) -->
+<div id="portalContent" style="display:none;">
+  <header class="hero" style="grid-template-columns: 1fr;">
+    <div>
+      <p class="eyebrow" id="portalEyebrow">API Access</p>
+      <h1 id="portalTitle"></h1>
+      <p class="subtitle" id="portalSubtitle"></p>
+    </div>
+    <div style="margin-top:16px;">
+      <div class="stat-card" style="text-align:left;">
+        <p style="margin:0; font-size:13px; color:var(--muted);">You're signing up for:</p>
+        <p style="margin:4px 0 0; font-size:20px; font-weight:700;" id="epBannerName"></p>
+        <p style="margin:4px 0 0; color:var(--muted);" id="epBannerDesc"></p>
+        <p style="margin:8px 0 0; font-size:14px;" id="epBannerCost"></p>
+      </div>
+    </div>
+  </header>
+
+  <main class="grid">
+    <!-- 1. Sign in or Register -->
+    <section class="card">
+      <h3>1. Sign in or register</h3>
+      <p class="muted">Enter your email to sign in, or register a new account.</p>
+      <label for="name">Name</label>
+      <input id="name" value="" placeholder="Your name" />
+      <label for="email">Email</label>
+      <input id="email" value="" placeholder="you@example.com" />
+      <div class="button-row">
+        <button id="loginBtn">Sign in</button>
+        <button id="registerBtn" class="secondary">Register new account</button>
+      </div>
+    </section>
+
+    <!-- 2. Top up -->
+    <section class="card">
+      <h3>2. Top up credits</h3>
+      <p class="muted">Pay with XRP on testnet via Xaman wallet.</p>
+      <label for="apiKey">API key</label>
+      <input id="apiKey" placeholder="Generated after registration" />
+      <label for="credits">Credits to buy</label>
+      <input id="credits" type="number" value="100" min="1" />
+      <p class="muted" id="xrpCostPreview" style="margin-top:6px; font-size:13px;"></p>
+      <button id="escrowBtn">Pay with XRP (non-custodial)</button>
+      <button id="topupBtn" class="secondary">Mock top-up (demo)</button>
+      <div id="qrWrap" style="display:none; text-align:center; margin-top:1rem;">
+        <p class="muted">Scan with Xaman app:</p>
+        <img id="qrImage" alt="Xaman QR code" style="max-width:200px; border-radius:8px;" />
+        <p id="qrStatus" class="muted" style="margin-top:0.5rem;">Waiting for payment...</p>
+      </div>
+    </section>
+
+    <!-- 3. Account -->
+    <section class="card">
+      <h3>3. Your account</h3>
+      <p class="muted">Check balance, ledger, and escrow status.</p>
+      <div class="button-row">
+        <button id="balanceBtn">Refresh balance</button>
+        <button id="ledgerBtn" class="secondary">Load ledger</button>
+        <button id="escrowInfoBtn" class="secondary">Escrow status</button>
+        <button id="verifyBtn" class="secondary">Verify integrity</button>
+      </div>
+      <div id="escrowInfo" style="display:none; margin-top:1rem;">
+        <p class="muted" id="escrowSummary"></p>
+      </div>
+      <div id="verifyResult" style="display:none; margin-top:12px; padding:12px; border-radius:10px;"></div>
+    </section>
+
+    <!-- 4. Call the endpoint -->
+    <section class="card">
+      <h3>4. Call the API</h3>
+      <p class="muted" id="callDescription"></p>
+      <label for="callBody">Request body (JSON)</label>
+      <textarea id="callBody" rows="3">{}</textarea>
+      <button id="callBtn">Call endpoint</button>
+    </section>
+  </main>
+
+  <div style="display:table; width:100%; table-layout:fixed; border-spacing:10px 0;">
+    <div style="display:table-cell; width:50%; vertical-align:top;">
+      <div class="output-card">
+        <h3>Latest response</h3>
+        <pre id="output" style="overflow:auto; max-height:400px;">Ready.</pre>
+      </div>
+    </div>
+    <div style="display:table-cell; width:50%; vertical-align:top;">
+      <div class="output-card">
+        <h3>Ledger</h3>
+        <div id="ledgerTableWrap" class="table-wrap muted" style="overflow:auto; max-height:400px;">No ledger loaded yet.</div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/customer.js"></script>
+{% endblock %}
