@@ -15,11 +15,11 @@ from app.db import (
     create_api_endpoint,
     create_developer,
     create_user,
-    find_developer_by_email,
+    authenticate_developer,
+    authenticate_user,
     find_developer_by_id,
     find_developer_by_key,
     find_user_by_api_key,
-    find_user_by_email,
     get_all_developers,
     get_all_endpoints,
     get_all_fees,
@@ -45,7 +45,6 @@ from app.models import (
     CreateEndpointRequest,
     DeveloperRegisterRequest,
     LoginRequest,
-    MockTopupRequest,
     ProxyCallRequest,
     RegisterRequest,
     SummariseRequest,
@@ -175,10 +174,10 @@ async def get_config():
 
 @app.post("/api/login")
 async def login_user(payload: LoginRequest):
-    '''Look up a customer by email and return their API key.'''
-    user = find_user_by_email(payload.email)
+    '''Authenticate a customer by email and password.'''
+    user = authenticate_user(payload.email, payload.password)
     if not user:
-        raise HTTPException(status_code=404, detail={"error": "No account found with this email"})
+        raise HTTPException(status_code=401, detail={"error": "Invalid email or password"})
     return {"message": "Signed in", "user": {
         "id": user["id"],
         "name": user["name"],
@@ -190,22 +189,9 @@ async def login_user(payload: LoginRequest):
 
 @app.post("/api/register")
 async def register_user(payload: RegisterRequest):
-    '''
-    POST /api/register
-
-    Creates a new user and issues an API key.
-
-    Expected body:
-    {
-      "name": "Demo Dev",
-      "email": "demo@example.com"
-    }
-
-    Why it exists:
-    - lets someone get started immediately in the MVP
-    '''
+    '''Register a new customer with username, email, and password.'''
     try:
-        user = create_user(payload.name, payload.email)
+        user = create_user(payload.name, payload.email, payload.password)
         return {
             "message": "User created",
             "user": user,
@@ -322,41 +308,6 @@ async def topup_xaman_status(payload_id: str):
     return result
 
 
-@app.post("/api/topup/mock")
-async def topup_mock(payload: MockTopupRequest):
-    '''
-    POST /api/topup/mock
-
-    Adds credits without using XRPL.
-
-    Expected body:
-    {
-      "apiKey": "pag_...",
-      "credits": 25
-    }
-
-    Why it exists:
-    - gives you the fastest possible demo flow
-    - avoids blocking the MVP on wallet/payment UX
-    '''
-    user = find_user_by_api_key(payload.apiKey)
-    if not user:
-        raise HTTPException(status_code=404, detail={"error": "API key not found"})
-
-    add_credits(
-        user_id=user["id"],
-        delta_credits=payload.credits,
-        reason="mock_topup",
-        meta={"source": "manual_demo"},
-    )
-
-    return {
-        "message": "Credits added",
-        "apiKey": payload.apiKey,
-        "balance": get_balance_by_user_id(user["id"]),
-    }
-
-
 @app.get("/api/balance/{api_key}")
 async def get_balance(api_key: str):
     '''
@@ -457,22 +408,28 @@ def require_credits(x_api_key: str | None):
 
 
 @app.post("/api/proxy/summarise")
-async def proxy_summarise(payload: SummariseRequest, x_api_key: str | None = Header(default=None)):
+async def proxy_summarise(payload: SummariseRequest,
+                          x_api_key: str | None = Header(default=None),
+                          x_gateway_secret: str | None = Header(default=None)):
     '''
     POST /api/proxy/summarise
 
-    This simulates a protected compute endpoint.
+    Demo upstream API. Summarises text to the first 20 words.
 
-    In a production version, this route would:
-    - forward the request to a real upstream API
-    - charge per endpoint or per usage unit
-    - return the upstream provider's response
-
-    For the MVP, we keep it very simple:
-    - require credits first
-    - summarise text by truncating to the first 20 words
-    - deduct one credit
+    Accepts either:
+    - x-api-key header (direct call with credits)
+    - x-gateway-secret header (called by the gateway proxy)
     '''
+    # If called via gateway proxy (has gateway secret), skip credit check
+    if x_gateway_secret and x_gateway_secret == GATEWAY_SECRET:
+        words = payload.text.strip().split()
+        summary = " ".join(words[:20])
+        return {
+            "originalLength": len(payload.text),
+            "summary": summary + ("..." if len(words) > 20 else ""),
+        }
+
+    # Direct call — require credits
     user = require_credits(x_api_key)
 
     words = payload.text.strip().split()
@@ -503,10 +460,10 @@ async def proxy_summarise(payload: SummariseRequest, x_api_key: str | None = Hea
 
 @app.post("/api/developer/login")
 async def login_developer(payload: LoginRequest):
-    '''Look up a developer by email and return their key.'''
-    dev = find_developer_by_email(payload.email)
+    '''Authenticate a developer by email and password.'''
+    dev = authenticate_developer(payload.email, payload.password)
     if not dev:
-        raise HTTPException(status_code=404, detail={"error": "No account found with this email"})
+        raise HTTPException(status_code=401, detail={"error": "Invalid email or password"})
     return {"message": "Signed in", "developer": {
         "id": dev["id"],
         "name": dev["name"],
@@ -519,9 +476,9 @@ async def login_developer(payload: LoginRequest):
 
 @app.post("/api/developer/register")
 async def register_developer(payload: DeveloperRegisterRequest):
-    '''Register a new developer and get a developer key.'''
+    '''Register a new developer with username, email, password, and XRPL address.'''
     try:
-        dev = create_developer(payload.name, payload.email, payload.xrplAddress)
+        dev = create_developer(payload.name, payload.email, payload.password, payload.xrplAddress)
         return {"message": "Developer registered", "developer": dev}
     except Exception as error:
         raise HTTPException(

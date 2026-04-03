@@ -36,6 +36,8 @@
       <input id="name" value="" placeholder="Choose a username" />
       <label for="email">Email</label>
       <input id="email" value="" placeholder="you@example.com" />
+      <label for="password">Password</label>
+      <input id="password" type="password" placeholder="Your password (min 4 chars)" />
       <div class="button-row">
         <button id="loginBtn">Sign in</button>
         <button id="registerBtn" class="secondary">Register new account</button>
@@ -43,7 +45,7 @@
     </section>
 
     <!-- 2. Top up -->
-    <section class="card">
+    <section class="card locked-section">
       <h3>2. Top up credits</h3>
       <p class="muted">Pay with XRP on testnet via Xaman wallet.</p>
       <label for="apiKey">API key</label>
@@ -52,7 +54,6 @@
       <input id="credits" type="number" value="100" min="1" />
       <p class="muted" id="xrpCostPreview" style="margin-top:6px; font-size:13px;"></p>
       <button id="payXrpBtn">Pay with XRP</button>
-      <button id="topupBtn" class="secondary">Mock top-up (demo)</button>
       <div id="qrWrap" style="display:none; text-align:center; margin-top:1rem;">
         <p class="muted">Scan with Xaman app:</p>
         <img id="qrImage" alt="Xaman QR code" style="max-width:200px; border-radius:8px;" />
@@ -60,42 +61,38 @@
       </div>
     </section>
 
-    <!-- 3. Account -->
-    <section class="card">
-      <h3>3. Your account</h3>
-      <p class="muted">Check balance, ledger, and escrow status.</p>
-      <div class="button-row">
-        <button id="balanceBtn">Refresh balance</button>
-        <button id="ledgerBtn" class="secondary">Load ledger</button>
-        <button id="verifyBtn" class="secondary">Verify integrity</button>
-      </div>
-      <div id="verifyResult" style="display:none; margin-top:12px; padding:12px; border-radius:10px;"></div>
-    </section>
-
-    <!-- 4. Call the endpoint -->
-    <section class="card">
-      <h3>4. Call the API</h3>
-      <p class="muted" id="callDescription"></p>
-      <label for="callBody">Request body (JSON)</label>
-      <textarea id="callBody" rows="3">{}</textarea>
-      <button id="callBtn">Call endpoint</button>
-    </section>
   </main>
 
-  <div style="display:table; width:100%; table-layout:fixed; border-spacing:10px 0;">
+  <!-- 3. Call the API (full width, two columns) -->
+  <div class="locked-section" style="display:table; width:100%; table-layout:fixed; border-spacing:10px 0; margin-bottom:20px;">
     <div style="display:table-cell; width:50%; vertical-align:top;">
-      <div class="output-card">
-        <h3>Latest response</h3>
-        <pre id="output" style="overflow:auto; max-height:400px;">Ready.</pre>
+      <div class="card">
+        <h3>3. Call the API</h3>
+        <p class="muted" id="callDescription"></p>
+        <label for="callBody">Request body (JSON)</label>
+        <textarea id="callBody" rows="5">{}</textarea>
+        <button id="callBtn">Call endpoint</button>
       </div>
     </div>
     <div style="display:table-cell; width:50%; vertical-align:top;">
-      <div class="output-card">
-        <h3>Ledger</h3>
-        <div id="ledgerTableWrap" class="table-wrap muted" style="overflow:auto; max-height:400px;">No ledger loaded yet.</div>
+      <div class="card">
+        <h3>Latest response</h3>
+        <pre id="output" style="overflow:auto; max-height:300px;">Ready.</pre>
       </div>
     </div>
   </div>
+
+  <!-- 4. Account (full width) -->
+  <section class="card locked-section" style="margin-bottom:20px;">
+    <h3>4. Your account</h3>
+    <p class="muted">Check balance, view ledger, or verify integrity.</p>
+    <div class="button-row">
+      <button id="balanceBtn">Refresh balance</button>
+      <button id="ledgerBtn" class="secondary">Load ledger</button>
+      <button id="verifyBtn" class="secondary">Verify integrity</button>
+    </div>
+    <div id="accountOutput" style="margin-top:1rem;"></div>
+  </section>
 </div>
 {% endblock %}
 

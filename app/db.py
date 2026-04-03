@@ -5,6 +5,18 @@ import sqlite3
 import uuid
 from datetime import datetime, timezone
 
+import bcrypt
+
+
+def hash_password(password: str) -> str:
+    '''Hash a password using bcrypt.'''
+    return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
+
+
+def verify_password(password: str, hashed: str) -> bool:
+    '''Verify a password against its bcrypt hash.'''
+    return bcrypt.checkpw(password.encode(), hashed.encode())
+
 '''
 This file is responsible for all local data storage.
 
@@ -58,16 +70,18 @@ def init_db():
             '''
             CREATE TABLE IF NOT EXISTS users (
               id TEXT PRIMARY KEY,
-              name TEXT NOT NULL,
+              name TEXT NOT NULL UNIQUE,
               email TEXT NOT NULL UNIQUE,
+              password_hash TEXT NOT NULL,
               api_key TEXT NOT NULL UNIQUE,
               created_at TEXT NOT NULL
             );
 
             CREATE TABLE IF NOT EXISTS developers (
               id TEXT PRIMARY KEY,
-              name TEXT NOT NULL,
+              name TEXT NOT NULL UNIQUE,
               email TEXT NOT NULL UNIQUE,
+              password_hash TEXT NOT NULL,
               developer_key TEXT NOT NULL UNIQUE,
               xrpl_address TEXT NOT NULL DEFAULT '',
               created_at TEXT NOT NULL
@@ -122,32 +136,28 @@ def init_db():
         connection.commit()
 
 
-def create_user(name: str, email: str):
-    '''
-    Create a new user and issue a new API key.
+def create_user(name: str, email: str, password: str):
+    '''Create a new user and issue a new API key. Password is hashed before storage.'''
+    # Check for duplicate username or email
+    with get_connection() as connection:
+        existing = connection.execute(
+            "SELECT id FROM users WHERE name = ? OR email = ?", (name, email)
+        ).fetchone()
+        if existing:
+            raise ValueError("A user with this username or email already exists")
 
-    Input:
-    - name
-    - email
-
-    Output:
-    - a user dictionary including the generated API key
-
-    Why it exists:
-    - the app needs a simple onboarding step
-    - the API key is what the gateway checks on each request
-    '''
     user_id = str(uuid.uuid4())
     api_key = f"pag_{uuid.uuid4().hex}"
+    pw_hash = hash_password(password)
     created_at = datetime.now(timezone.utc).isoformat()
 
     with get_connection() as connection:
         connection.execute(
             '''
-            INSERT INTO users (id, name, email, api_key, created_at)
-            VALUES (?, ?, ?, ?, ?)
+            INSERT INTO users (id, name, email, password_hash, api_key, created_at)
+            VALUES (?, ?, ?, ?, ?, ?)
             ''',
-            (user_id, name, email, api_key, created_at),
+            (user_id, name, email, pw_hash, api_key, created_at),
         )
         connection.commit()
 
@@ -168,6 +178,16 @@ def find_user_by_email(email: str):
             (email,),
         ).fetchone()
     return dict(row) if row else None
+
+
+def authenticate_user(email: str, password: str):
+    '''Authenticate a user by email and password. Returns user dict or None.'''
+    user = find_user_by_email(email)
+    if not user:
+        return None
+    if not verify_password(password, user["password_hash"]):
+        return None
+    return user
 
 
 def find_user_by_api_key(api_key: str):
@@ -404,19 +424,28 @@ def verify_ledger(user_id: str) -> dict:
 
 # ── Developer functions ──
 
-def create_developer(name: str, email: str, xrpl_address: str = ""):
-    '''Create a new developer and issue a developer key.'''
+def create_developer(name: str, email: str, password: str, xrpl_address: str = ""):
+    '''Create a new developer and issue a developer key. Password is hashed before storage.'''
+    # Check for duplicate username or email
+    with get_connection() as connection:
+        existing = connection.execute(
+            "SELECT id FROM developers WHERE name = ? OR email = ?", (name, email)
+        ).fetchone()
+        if existing:
+            raise ValueError("A developer with this username or email already exists")
+
     dev_id = str(uuid.uuid4())
     developer_key = f"dev_{uuid.uuid4().hex}"
+    pw_hash = hash_password(password)
     created_at = datetime.now(timezone.utc).isoformat()
 
     with get_connection() as connection:
         connection.execute(
             '''
-            INSERT INTO developers (id, name, email, developer_key, xrpl_address, created_at)
-            VALUES (?, ?, ?, ?, ?, ?)
+            INSERT INTO developers (id, name, email, password_hash, developer_key, xrpl_address, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
             ''',
-            (dev_id, name, email, developer_key, xrpl_address, created_at),
+            (dev_id, name, email, pw_hash, developer_key, xrpl_address, created_at),
         )
         connection.commit()
 
@@ -448,6 +477,16 @@ def find_developer_by_id(developer_id: str):
             (developer_id,),
         ).fetchone()
     return dict(row) if row else None
+
+
+def authenticate_developer(email: str, password: str):
+    '''Authenticate a developer by email and password. Returns developer dict or None.'''
+    dev = find_developer_by_email(email)
+    if not dev:
+        return None
+    if not verify_password(password, dev["password_hash"]):
+        return None
+    return dev
 
 
 def find_developer_by_email(email: str):

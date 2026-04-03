@@ -11,15 +11,10 @@ Why this exists:
 
 
 class RegisterRequest(BaseModel):
-    '''
-    Expected body for creating a new user.
-
-    Fields:
-    - name: display name shown in the UI and responses
-    - email: unique email address for the user
-    '''
+    '''Expected body for creating a new user.'''
     name: str = Field(..., min_length=1)
     email: EmailStr
+    password: str = Field(..., min_length=4)
 
 
 class MockTopupRequest(BaseModel):
@@ -59,14 +54,16 @@ class SummariseRequest(BaseModel):
 
 
 class LoginRequest(BaseModel):
-    '''Expected body for signing in by email.'''
+    '''Expected body for signing in.'''
     email: EmailStr
+    password: str = Field(..., min_length=1)
 
 
 class DeveloperRegisterRequest(BaseModel):
     '''Expected body for registering a new developer.'''
     name: str = Field(..., min_length=1)
     email: EmailStr
+    password: str = Field(..., min_length=4)
     xrplAddress: str = ""
 
 

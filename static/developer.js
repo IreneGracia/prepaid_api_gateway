@@ -94,7 +94,12 @@ setTimeout(updateDevCostPreview, 500);
 // ── Sign in ──
 document.getElementById("devLoginBtn").addEventListener("click", async () => {
   const email = document.getElementById("devEmail").value;
-  const data = await postJSON("/api/developer/login", { email });
+  const password = document.getElementById("loginPassword").value;
+  const data = await postJSON("/api/developer/login", { email, password });
+  if (data?.detail) {
+    alert(data.detail.error || JSON.stringify(data.detail));
+    return;
+  }
   if (data?.developer?.developerKey) {
     currentDevKey = data.developer.developerKey;
     els.devKey.value = currentDevKey;
@@ -108,8 +113,13 @@ document.getElementById("devRegisterBtn").addEventListener("click", async () => 
   const data = await postJSON("/api/developer/register", {
     name: document.getElementById("regUsername").value,
     email: document.getElementById("devEmailReg").value,
+    password: document.getElementById("regPassword").value,
     xrplAddress: document.getElementById("devXrplAddress").value,
   });
+  if (data?.detail) {
+    alert(data.detail.error || data.detail.details || JSON.stringify(data.detail));
+    return;
+  }
   if (data?.developer?.developerKey) {
     currentDevKey = data.developer.developerKey;
     els.devKey.value = currentDevKey;
@@ -122,16 +132,23 @@ document.getElementById("devRegisterBtn").addEventListener("click", async () => 
 document.getElementById("addEndpointBtn").addEventListener("click", async () => {
   const xrp = Number(els.epXrpCost.value) || 0;
   const credits = xrpToCredits(xrp);
-  if (credits < 1) return;
-  await postJSON("/api/developer/endpoint", {
+  if (credits < 1) {
+    alert("Cost must be at least 1 credit. Check the XRP amount.");
+    return;
+  }
+  const data = await postJSON("/api/developer/endpoint", {
     developerKey: els.devKey.value,
     name: els.epName.value,
     description: els.epDesc.value,
     url: els.epUrl.value,
     costPerCall: credits,
   });
-  // Auto-reload endpoints after adding
-  document.getElementById("loadEndpointsBtn").click();
+  if (data.error || data.detail) {
+    alert(JSON.stringify(data.detail || data.error));
+  } else {
+    // Auto-reload endpoints after adding
+    document.getElementById("loadEndpointsBtn").click();
+  }
 });
 
 // ── Load endpoints ──
@@ -209,10 +226,11 @@ document.getElementById("usageBtn").addEventListener("click", async () => {
 // ── Save XRPL address (sign in by email first, then update) ──
 document.getElementById("saveXrplBtn").addEventListener("click", async () => {
   const email = document.getElementById("updateEmail").value;
+  const password = document.getElementById("updatePassword").value;
   const newAddress = document.getElementById("newXrplAddress").value.trim();
 
   // Sign in first to get the key
-  const loginData = await postJSON("/api/developer/login", { email });
+  const loginData = await postJSON("/api/developer/login", { email, password });
   if (!loginData?.developer?.developerKey) return;
 
   const key = loginData.developer.developerKey;

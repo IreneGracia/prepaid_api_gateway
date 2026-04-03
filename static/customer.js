@@ -32,6 +32,22 @@ const els = {
 
 const out = (data) => { if (els.output) renderOutput(els.output, data); };
 
+// ── Locked sections (greyed out until signed in) ──
+const lockedSections = document.querySelectorAll(".locked-section");
+
+function unlockSections() {
+  lockedSections.forEach(s => {
+    s.style.opacity = "1";
+    s.style.pointerEvents = "auto";
+  });
+}
+
+// Start locked
+lockedSections.forEach(s => {
+  s.style.opacity = "0.35";
+  s.style.pointerEvents = "none";
+});
+
 // ── Load endpoint details and populate the UI ──
 let endpoint = null;
 
@@ -85,12 +101,18 @@ if (els.credits) {
 // ── Sign in ──
 document.getElementById("loginBtn")?.addEventListener("click", async () => {
   const data = await postJSON("/api/login", {
-    email: els.email.value
+    email: els.email.value,
+    password: document.getElementById("password").value,
   });
+  if (data?.detail) {
+    alert(data.detail.error || JSON.stringify(data.detail));
+    return;
+  }
   out(data);
   if (data?.user?.apiKey) {
     els.apiKey.value = data.user.apiKey;
     els.name.value = data.user.name;
+    unlockSections();
   }
 });
 
@@ -98,19 +120,18 @@ document.getElementById("loginBtn")?.addEventListener("click", async () => {
 document.getElementById("registerBtn")?.addEventListener("click", async () => {
   const data = await postJSON("/api/register", {
     name: els.name.value,
-    email: els.email.value
+    email: els.email.value,
+    password: document.getElementById("password").value,
   });
+  if (data?.detail) {
+    alert(data.detail.error || data.detail.details || JSON.stringify(data.detail));
+    return;
+  }
   out(data);
-  if (data?.user?.apiKey) els.apiKey.value = data.user.apiKey;
-});
-
-// ── Mock top-up ──
-document.getElementById("topupBtn")?.addEventListener("click", async () => {
-  const data = await postJSON("/api/topup/mock", {
-    apiKey: els.apiKey.value,
-    credits: Number(els.credits.value)
-  });
-  out(data);
+  if (data?.user?.apiKey) {
+    els.apiKey.value = data.user.apiKey;
+    unlockSections();
+  }
 });
 
 // ── Pay with XRP ──
@@ -130,64 +151,70 @@ document.getElementById("payXrpBtn")?.addEventListener("click", async () => {
   pollXamanStatus(data.payloadId, els.qrStatus, els.output, loadBalance);
 });
 
+// ── Account output (shared area for balance, ledger, verify) ──
+function showAccountOutput(html) {
+  const el = document.getElementById("accountOutput");
+  if (el) el.innerHTML = html;
+}
+
 // ── Balance ──
 async function loadBalance() {
   const data = await getJSON(`/api/balance/${encodeURIComponent(els.apiKey.value)}`);
   if (data.balance !== undefined) {
-    data.balanceInXrp = creditsToXrp(data.balance);
+    showAccountOutput(`
+      <p><strong>Balance: ${formatCost(data.balance)}</strong></p>
+    `);
   }
-  out(data);
 }
 document.getElementById("balanceBtn")?.addEventListener("click", loadBalance);
 
 // ── Ledger ──
 document.getElementById("ledgerBtn")?.addEventListener("click", async () => {
   const data = await getJSON(`/api/ledger/${encodeURIComponent(els.apiKey.value)}`);
-  out(data);
 
-  if (!Array.isArray(data.ledger)) {
-    els.ledgerTableWrap.textContent = "No ledger data.";
+  if (!Array.isArray(data.ledger) || data.ledger.length === 0) {
+    showAccountOutput("<p class='muted'>No ledger entries yet.</p>");
     return;
   }
 
   const rows = data.ledger.map(e => `
     <tr>
-      <td>${e.created_at}</td>
+      <td>${e.created_at.slice(0,19).replace('T',' ')}</td>
       <td>${e.reason}</td>
       <td>${e.delta_credits}</td>
       <td><code>${JSON.stringify(e.meta ?? {})}</code></td>
+      <td><code>${e.hash ? e.hash.slice(0,16) + '...' : '-'}</code></td>
     </tr>
   `).join("");
 
-  els.ledgerTableWrap.innerHTML = `
-    <table>
-      <thead><tr><th>Created</th><th>Reason</th><th>Delta</th><th>Meta</th></tr></thead>
-      <tbody>${rows || `<tr><td colspan="4">No entries.</td></tr>`}</tbody>
-    </table>`;
+  showAccountOutput(`
+    <div class="table-wrap" style="overflow:auto; max-height:400px;">
+      <table>
+        <thead><tr><th>Time</th><th>Reason</th><th>Delta</th><th>Meta</th><th>Hash</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+  `);
 });
 
 // ── Verify ledger integrity ──
 document.getElementById("verifyBtn")?.addEventListener("click", async () => {
   const data = await getJSON(`/api/ledger/${encodeURIComponent(els.apiKey.value)}/verify`);
-  out(data);
-
-  const el = document.getElementById("verifyResult");
-  el.style.display = "block";
 
   if (data.valid) {
-    el.style.background = "rgba(168, 240, 198, 0.1)";
-    el.style.border = "1px solid var(--success)";
-    el.innerHTML = `
-      <strong style="color: var(--success);">Ledger integrity: VALID</strong><br>
-      <span class="muted">${data.entries_checked} entries checked. All records are untampered.</span>
-    `;
+    showAccountOutput(`
+      <div style="padding:12px; border-radius:10px; background:rgba(168,240,198,0.1); border:1px solid var(--success);">
+        <strong style="color: var(--success);">Ledger integrity: VALID</strong><br>
+        <span class="muted">${data.entries_checked} entries checked. All records are untampered.</span>
+      </div>
+    `);
   } else {
-    el.style.background = "rgba(255, 159, 159, 0.1)";
-    el.style.border = "1px solid var(--danger)";
-    el.innerHTML = `
-      <strong style="color: var(--danger);">Ledger integrity: BROKEN</strong><br>
-      <span class="muted">Tampered entry: ${data.broken_at || "unknown"}. Your records have been modified.</span>
-    `;
+    showAccountOutput(`
+      <div style="padding:12px; border-radius:10px; background:rgba(255,159,159,0.1); border:1px solid var(--danger);">
+        <strong style="color: var(--danger);">Ledger integrity: BROKEN</strong><br>
+        <span class="muted">Tampered entry: ${data.broken_at || "unknown"}. Your records have been modified.</span>
+      </div>
+    `);
   }
 });
 
