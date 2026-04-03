@@ -1,4 +1,3 @@
-import asyncio
 import os
 
 from dotenv import load_dotenv
@@ -82,17 +81,6 @@ GATEWAY_SECRET = os.getenv("GATEWAY_SECRET", "")
 # Initialise the local SQLite database.
 init_db()
 
-
-@app.on_event("startup")
-async def start_xrpl_listener():
-    '''
-    Launch the XRPL listener as a background task when the server starts.
-    It runs alongside the web server and watches for incoming payments.
-    '''
-    if os.getenv("XRPL_ENABLED", "false").lower() == "true":
-        from app.xrpl_listener import main as xrpl_main
-        asyncio.create_task(xrpl_main())
-        print("XRPL listener started as background task")
 
 # Mount static files so the CSS and JavaScript are served to the browser.
 app.mount("/static", StaticFiles(directory="static"), name="static")

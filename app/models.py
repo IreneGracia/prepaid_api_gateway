@@ -17,17 +17,6 @@ class RegisterRequest(BaseModel):
     password: str = Field(..., min_length=4)
 
 
-class MockTopupRequest(BaseModel):
-    '''
-    Expected body for adding mock credits.
-
-    Fields:
-    - apiKey: the issued API key we want to top up
-    - credits: a positive integer amount of demo credits
-    '''
-    apiKey: str = Field(..., min_length=1)
-    credits: int = Field(..., gt=0)
-
 
 class XamanTopupRequest(BaseModel):
     '''
