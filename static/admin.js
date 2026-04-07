@@ -8,7 +8,6 @@ const els = {
   endpointsList: document.getElementById("endpointsList"),
   customersList: document.getElementById("customersList"),
   paymentsList: document.getElementById("paymentsList"),
-  feesList: document.getElementById("feesList"),
 };
 
 
@@ -130,28 +129,3 @@ document.getElementById("loadPaymentsBtn").addEventListener("click", async () =>
     </table>`;
 });
 
-// ── Platform Fees ──
-document.getElementById("loadFeesBtn").addEventListener("click", async () => {
-  const data = await getJSON("/api/admin/fees");
-
-  if (!data.fees || data.fees.length === 0) {
-    els.feesList.innerHTML = "<p class='muted'>No fees recorded yet.</p>";
-    return;
-  }
-
-  const rows = data.fees.map(f => `
-    <tr>
-      <td>${f.developer_name}</td>
-      <td>${f.amount_credits} credits</td>
-      <td>${f.amount_xrp} XRP</td>
-      <td>${f.status}</td>
-      <td>${f.created_at.slice(0,19).replace('T',' ')}</td>
-    </tr>
-  `).join("");
-
-  els.feesList.innerHTML = `
-    <table>
-      <thead><tr><th>Developer</th><th>Credits</th><th>XRP</th><th>Status</th><th>Date</th></tr></thead>
-      <tbody>${rows}</tbody>
-    </table>`;
-});

@@ -87,15 +87,7 @@ def init_db():
               created_at TEXT NOT NULL
             );
 
-            CREATE TABLE IF NOT EXISTS platform_fees (
-              id TEXT PRIMARY KEY,
-              developer_id TEXT NOT NULL,
-              amount_credits INTEGER NOT NULL,
-              amount_xrp REAL NOT NULL,
-              status TEXT NOT NULL DEFAULT 'unpaid',
-              created_at TEXT NOT NULL,
-              FOREIGN KEY(developer_id) REFERENCES developers(id)
-            );
+
 
             CREATE TABLE IF NOT EXISTS api_endpoints (
               id TEXT PRIMARY KEY,
@@ -341,41 +333,6 @@ def get_ledger_by_user_id(user_id: str):
     return ledger
 
 
-def record_platform_fee(developer_id: str, amount_credits: int, amount_xrp: float):
-    '''Record a platform fee owed by a developer.'''
-    fee_id = str(uuid.uuid4())
-    created_at = datetime.now(timezone.utc).isoformat()
-
-    with get_connection() as connection:
-        connection.execute(
-            '''
-            INSERT INTO platform_fees (id, developer_id, amount_credits, amount_xrp, status, created_at)
-            VALUES (?, ?, ?, ?, 'unpaid', ?)
-            ''',
-            (fee_id, developer_id, amount_credits, amount_xrp, created_at),
-        )
-        connection.commit()
-
-    return fee_id
-
-
-def get_developer_fees(developer_id: str):
-    '''Get total fees owed by a developer.'''
-    with get_connection() as connection:
-        row = connection.execute(
-            '''
-            SELECT COALESCE(SUM(amount_credits), 0) AS total_credits,
-                   COALESCE(SUM(amount_xrp), 0) AS total_xrp
-            FROM platform_fees
-            WHERE developer_id = ? AND status = 'unpaid'
-            ''',
-            (developer_id,),
-        ).fetchone()
-
-    return {
-        "owedCredits": int(row["total_credits"]),
-        "owedXrp": round(float(row["total_xrp"]), 6),
-    }
 
 
 def update_developer_xrpl_address(developer_id: str, xrpl_address: str):
@@ -684,18 +641,6 @@ def get_all_payments():
     return results
 
 
-def get_all_fees():
-    '''Get all platform fees across all developers.'''
-    with get_connection() as connection:
-        rows = connection.execute(
-            '''
-            SELECT f.*, d.name AS developer_name
-            FROM platform_fees f
-            JOIN developers d ON f.developer_id = d.id
-            ORDER BY f.created_at DESC
-            '''
-        ).fetchall()
-    return [dict(row) for row in rows]
 
 
 def get_platform_stats():

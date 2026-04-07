@@ -187,8 +187,6 @@ document.getElementById("revenueBtn").addEventListener("click", async () => {
 
   // Clear other sections
   els.usageList.innerHTML = "";
-  document.getElementById("feesInfo").innerHTML = "";
-
   if (data.totalRevenue !== undefined) {
     let html = `<p><strong>Total revenue: ${formatCost(data.totalRevenue)}</strong></p>`;
     if (data.endpoints && data.endpoints.length > 0) {
@@ -208,8 +206,6 @@ document.getElementById("usageBtn").addEventListener("click", async () => {
 
   // Clear other sections
   els.revenueInfo.innerHTML = "";
-  document.getElementById("feesInfo").innerHTML = "";
-
   if (!data.calls || data.calls.length === 0) {
     els.usageList.innerHTML = "<p class='muted'>No calls yet.</p>";
     return;
@@ -246,21 +242,6 @@ document.getElementById("saveXrplBtn").addEventListener("click", async () => {
   unlockSections();
 });
 
-// ── Fees ──
-document.getElementById("feesBtn").addEventListener("click", async () => {
-  const key = els.devKey.value.trim();
-  const data = await getJSON(`/api/developer/${encodeURIComponent(key)}/fees`);
-
-  // Clear other sections
-  els.revenueInfo.innerHTML = "";
-  els.usageList.innerHTML = "";
-
-  const feesInfo = document.getElementById("feesInfo");
-  if (data.owedCredits !== undefined) {
-    feesInfo.innerHTML = `<p><strong>Platform fees owed: ${formatCost(data.owedCredits)}</strong></p>
-      <p class="muted">This is 5% of credits purchased by your customers. Pay to keep your endpoints active.</p>`;
-  }
-});
 
 // ── Security settings ──
 const secEls = {

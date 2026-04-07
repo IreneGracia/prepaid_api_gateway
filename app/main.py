@@ -21,12 +21,10 @@ from app.db import (
     find_user_by_api_key,
     get_all_developers,
     get_all_endpoints,
-    get_all_fees,
     get_all_payments,
     get_all_users,
     get_balance_by_api_key,
     get_balance_by_user_id,
-    get_developer_fees,
     get_developer_revenue,
     get_developer_usage,
     get_endpoint_by_id,
@@ -35,7 +33,6 @@ from app.db import (
     get_platform_stats,
     init_db,
     record_api_call,
-    record_platform_fee,
     update_developer_xrpl_address,
     update_endpoint,
     verify_ledger,
@@ -260,8 +257,6 @@ async def topup_xaman_status(payload_id: str):
     if result.get("signed") and payload_id not in _credited_payloads:
         api_key = _payload_to_apikey.get(payload_id)
         credits = _payload_to_credits.get(payload_id, 0)
-        endpoint_id = _payload_to_endpoint.get(payload_id)
-
         if api_key and credits > 0:
             user = find_user_by_api_key(api_key)
             if user:
@@ -279,14 +274,6 @@ async def topup_xaman_status(payload_id: str):
                         "senderAddress": result.get("account"),
                     },
                 )
-
-                # Record platform fee (5% of credits)
-                if endpoint_id:
-                    endpoint = get_endpoint_by_id(endpoint_id)
-                    if endpoint:
-                        fee_credits = max(1, int(credits * 0.05))
-                        fee_xrp = fee_credits / CREDITS_PER_XRP
-                        record_platform_fee(endpoint["developer_id"], fee_credits, fee_xrp)
 
                 _credited_payloads.add(payload_id)
                 result["creditsAdded"] = credits
@@ -564,15 +551,6 @@ async def dev_update_security(developer_key: str, request: Request):
     return {"message": "Security settings updated", "settings": get_all_settings()}
 
 
-@app.get("/api/developer/{developer_key}/fees")
-async def dev_fees(developer_key: str):
-    '''Get platform fees owed by this developer.'''
-    dev = find_developer_by_key(developer_key)
-    if not dev:
-        raise HTTPException(status_code=404, detail={"error": "Developer key not found"})
-    return get_developer_fees(dev["id"])
-
-
 @app.put("/api/developer/{developer_key}/xrpl-address")
 async def dev_update_xrpl(developer_key: str, request: Request):
     '''Update the developer's XRPL address for receiving payments.'''
@@ -806,12 +784,6 @@ async def admin_endpoints(_=Depends(require_admin_auth)):
 async def admin_payments(_=Depends(require_admin_auth)):
     '''All XRP payments received.'''
     return {"payments": get_all_payments()}
-
-
-@app.get("/api/admin/fees")
-async def admin_fees(_=Depends(require_admin_auth)):
-    '''All platform fees owed by developers.'''
-    return {"fees": get_all_fees()}
 
 
 @app.get("/api/admin/security-log")
