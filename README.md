@@ -17,7 +17,6 @@ Customer calls API → gateway checks balance → deducts credits → forwards r
 - **Non-custodial** — the platform is not a custodian. It orchestrates payments, not holds them
 - **Tamper-proof ledger** — every credit movement is SHA-256 hash-chained. Customers can verify integrity
 - **Configurable exchange rate** — developer sets `CREDITS_PER_XRP` (e.g. 100 credits per XRP)
-- **Platform fee tracking** — 5% fee recorded per payment, owed by developer. Don't pay = endpoints disabled
 - **Security middleware** — rate limiting, DDoS protection, IP filtering, request validation, brute force detection — all configurable from the developer dashboard
 - **Developer dashboard** — register with XRPL address, add endpoints, set pricing in XRP, track revenue, configure security
 - **Customer portal** — endpoint-specific registration pages (via shared link) with XRP payment and API calling
@@ -133,7 +132,6 @@ Option B — Pay with XRP via Xaman (real XRPL testnet payment):
 
 - Click "Load revenue" — shows total credits earned and per-endpoint breakdown
 - Click "Recent calls" — shows who called, when, which endpoint, and how much it cost
-- Click "Platform fees owed" — shows 5% platform fee accumulated
 
 ### Part 4: Admin overview
 
@@ -145,7 +143,6 @@ Option B — Pay with XRP via Xaman (real XRPL testnet payment):
 - Click "Load endpoints" — see all API endpoints across all developers
 - Click "Load customers" — see all customers with their balances
 - Click "Load payments" — see all XRP payments received
-- Click "Load fees" — see all platform fees owed by developers
 
 ## Interfaces
 
@@ -162,11 +159,9 @@ Option B — Pay with XRP via Xaman (real XRPL testnet payment):
 ```
 app/
   main.py             — FastAPI routes (developer, customer, proxy, admin)
-  db.py               — SQLite database (users, developers, endpoints, fees, ledger, calls)
+  db.py               — SQLite database (users, developers, endpoints, ledger, calls)
   models.py           — Pydantic request models
   xaman.py            — Xaman wallet integration (payment QR codes)
-  xrpl_listener.py    — XRPL websocket listener for incoming payments (backup)
-  escrow.py           — XRPL escrow operations (legacy, not used in current model)
   security/
     __init__.py        — Registers all middleware on the app
     config.py          — Security settings (runtime-configurable via dashboard)
@@ -214,7 +209,6 @@ static/
 - `GET /api/developer/{key}/endpoints` — list your endpoints
 - `GET /api/developer/{key}/revenue` — revenue stats
 - `GET /api/developer/{key}/usage` — recent call logs
-- `GET /api/developer/{key}/fees` — platform fees owed
 - `GET /api/developer/{key}/security` — view security settings
 - `PUT /api/developer/{key}/security` — update security settings
 - `PUT /api/developer/{key}/xrpl-address` — update XRPL address (validated against testnet)
@@ -225,7 +219,6 @@ static/
 - `GET /api/admin/developers` — all developers
 - `GET /api/admin/endpoints` — all endpoints
 - `GET /api/admin/payments` — all XRP payments
-- `GET /api/admin/fees` — all platform fees owed
 - `GET /api/admin/security-log` — recent security events
 
 ### Public
@@ -239,9 +232,7 @@ static/
 2. Platform never holds customer or developer funds (non-custodial)
 3. Gateway provisions credits in the local database
 4. Credits are non-refundable (same model as OpenAI, Twilio, AWS)
-5. Platform records a 5% fee owed by the developer per payment
-6. Developer doesn't pay fees → platform disables their endpoints
-7. All payments are on the public XRPL — independently verifiable by both sides
+5. All payments are on the public XRPL — independently verifiable by both sides
 
 ## How the credit model works
 
@@ -264,11 +255,7 @@ static/
 | `CREDITS_PER_XRP` | Exchange rate (e.g. 100 = 1 XRP buys 100 credits) | 100 |
 | `DB_PATH` | Path to SQLite database file | ./gateway.db |
 | `GATEWAY_SECRET` | Shared secret sent as X-Gateway-Secret header to upstream APIs | |
-| `XRPL_ENABLED` | Enable the XRPL websocket listener | true |
-| `XRPL_SERVER` | XRPL testnet websocket URL | wss://s.altnet.rippletest.net:51233 |
-| `XRPL_RPC` | XRPL testnet RPC URL | https://s.altnet.rippletest.net:51234 |
-| `XRPL_RECEIVER_ADDRESS` | Gateway's XRPL testnet address (for listener) | |
-| `XRPL_RECEIVER_SEED` | Gateway's XRPL testnet wallet seed | |
+| `XRPL_RPC` | XRPL testnet RPC URL (for address validation) | https://s.altnet.rippletest.net:51234 |
 | `XAMAN_API_KEY` | Xaman API key (from apps.xumm.dev) | |
 | `XAMAN_API_SECRET` | Xaman API secret | |
 | `SEC_AUTH_ENABLED` | Enable JWT auth for admin portal | false |
